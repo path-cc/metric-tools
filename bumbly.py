@@ -35,5 +35,38 @@ def cpu_hours_for_window(days):
     resp = s.execute()
     return int(resp.aggregations.CoreHours.value) 
 
-for x in (7,30,90):
-    print x, cpu_hours_for_window(x)
+
+def main():
+
+    last7d = cpu_hours_for_window(7)
+    last30d = cpu_hours_for_window(30)
+    last90d = cpu_hours_for_window(90)
+
+    html = """\
+<!DOCTYPE html>
+<html>
+<head>
+<title>OSG CPU Hours</title>
+</head>
+<body>
+<h2>OSG CPU Hours</h2>
+<table border=1>
+<tr>
+<th>Last 7 Days</th>
+<th>Last 30 Days</th>
+<th>Last 90 Days</th>
+</tr>
+<tr>
+<td align="right">{last7d}</td>
+<td align="right">{last30d}</td>
+<td align="right">{last90d}</td>
+</tr>
+</table>
+</body>
+</html>""".format(**locals())
+
+    print(html)
+
+if __name__ == '__main__':
+    main()
+
