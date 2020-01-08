@@ -57,9 +57,9 @@ def main():
 <th>Last 90 Days</th>
 </tr>
 <tr>
-<td align="center">{last7d}</td>
-<td align="center">{last30d}</td>
-<td align="center">{last90d}</td>
+<td align="center">{last7d:,}</td>
+<td align="center">{last30d:,}</td>
+<td align="center">{last90d:,}</td>
 </tr>
 </table>
 </body>
