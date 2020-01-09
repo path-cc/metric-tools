@@ -48,7 +48,7 @@ def main():
 <html>
 <head>
 <title>OSG CPU Hours</title>
-<style>table {font-family: monospace}</style>
+<style>table {{font-family: monospace}}</style>
 </head>
 <body>
 <h2>OSG CPU Hours</h2>
