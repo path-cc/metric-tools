@@ -20,6 +20,11 @@ CC_star_fqdns = [
     "hosted-ce33.grid.uchicago.edu"
 ]
 
+#CC_star_probenames = [ "*:%s" % f for f in CC_star_fqdns ]
+#
+#WC = reduce((lambda a,b:a|b),
+#            ( Q('wildcard', ProbeName=p) for p in CC_star_probenames ))
+
 def cpu_hours_for_window(days):
     s = Search(using=es, index=jobs_summary_index)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
