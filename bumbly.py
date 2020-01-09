@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+import os
+import json
 import datetime
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
@@ -79,6 +81,11 @@ def main():
     last365d = cpu_hours_for_window(365)
 
     print(html_template.format(**locals()))
+
+    jpath = "/dev/fd/999"
+    if os.path.exists(jpath):
+        with open(jpath, "w") as j:
+            json.dump([last30d, last90d, last365d], j)
 
 if __name__ == '__main__':
     main()
