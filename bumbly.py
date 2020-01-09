@@ -38,9 +38,10 @@ def cpu_hours_for_window(days):
 
 def main():
 
-    last7d = cpu_hours_for_window(7)
+    #last7d = cpu_hours_for_window(7)
     last30d = cpu_hours_for_window(30)
     last90d = cpu_hours_for_window(90)
+    last365d = cpu_hours_for_window(365)
 
     html = """\
 <!DOCTYPE html>
@@ -53,14 +54,14 @@ def main():
 <h2>OSG CPU Hours</h2>
 <table border=1>
 <tr>
-<th>Last 7 Days</th>
 <th>Last 30 Days</th>
 <th>Last 90 Days</th>
+<th>Last 365 Days</th>
 </tr>
 <tr>
-<td align="center">{last7d:,}</td>
 <td align="center">{last30d:,}</td>
 <td align="center">{last90d:,}</td>
+<td align="center">{last365d:,}</td>
 </tr>
 </table>
 </body>
