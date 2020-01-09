@@ -4,6 +4,33 @@ import datetime
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
 
+html_template = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>OSG CPU Hours</title>
+<style>
+table {{font-family: monospace}}
+td {{text-align: center}}
+</style>
+</head>
+<body>
+<h2>OSG CPU Hours for CC*</h2>
+<table border=1>
+<tr>
+<th>Last 30 Days</th>
+<th>Last 90 Days</th>
+<th>Last 365 Days</th>
+</tr>
+<tr>
+<td>{last30d:,}</td>
+<td>{last90d:,}</td>
+<td>{last365d:,}</td>
+</tr>
+</table>
+</body>
+</html>"""
+
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
 es = elasticsearch.Elasticsearch(
@@ -51,34 +78,7 @@ def main():
     last90d = cpu_hours_for_window(90)
     last365d = cpu_hours_for_window(365)
 
-    html = """\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<title>OSG CPU Hours</title>
-<style>
-table {{font-family: monospace}}
-td {{text-align: center}}
-</style>
-</head>
-<body>
-<h2>OSG CPU Hours for CC*</h2>
-<table border=1>
-<tr>
-<th>Last 30 Days</th>
-<th>Last 90 Days</th>
-<th>Last 365 Days</th>
-</tr>
-<tr>
-<td>{last30d:,}</td>
-<td>{last90d:,}</td>
-<td>{last365d:,}</td>
-</tr>
-</table>
-</body>
-</html>""".format(**locals())
-
-    print(html)
+    print(html_template.format(**locals()))
 
 if __name__ == '__main__':
     main()
