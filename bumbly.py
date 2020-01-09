@@ -14,11 +14,8 @@ jobs_raw_index = 'gracc.osg.raw-*'
 jobs_summary_index = 'gracc.osg.summary'
 
 def cpu_hours_for_window(days):
-
     s = Search(using=es, index=jobs_summary_index)
-
-    #endtime = datetime.datetime(2020, 1, 8)
-    endtime = datetime.datetime.date(datetime.datetime.now())  # midnight today
+    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
 
     starttime =  endtime - datetime.timedelta(days)
     s = s.query('bool',
