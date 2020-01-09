@@ -13,6 +13,13 @@ es = elasticsearch.Elasticsearch(
 jobs_raw_index = 'gracc.osg.raw-*'
 jobs_summary_index = 'gracc.osg.summary'
 
+CC_star_fqdns = [
+    "hosted-ce22.grid.uchicago.edu",
+    "hosted-ce30.grid.uchicago.edu",
+    "pearc-ce-2.grid.uchicago.edu",
+    "hosted-ce33.grid.uchicago.edu"
+]
+
 def cpu_hours_for_window(days):
     s = Search(using=es, index=jobs_summary_index)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
@@ -22,6 +29,7 @@ def cpu_hours_for_window(days):
             filter=[
              Q('range', EndTime={'gte': starttime, 'lt': endtime })
           &  Q('term',  ResourceType='Batch')
+          &  Q('terms', OIM_FQDN=CC_star_fqdns)
           & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
           & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
         ]
@@ -49,7 +57,7 @@ td {{text-align: center}}
 </style>
 </head>
 <body>
-<h2>OSG CPU Hours</h2>
+<h2>OSG CPU Hours for CC*</h2>
 <table border=1>
 <tr>
 <th>Last 30 Days</th>
