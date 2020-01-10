@@ -29,8 +29,8 @@ CC_star_fqdns = [
 def cpu_hours_for_window(days):
     s = Search(using=es, index=jobs_summary_index)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
-
     starttime =  endtime - datetime.timedelta(days)
+
     s = s.query('bool',
             filter=[
              Q('range', EndTime={'gte': starttime, 'lt': endtime })
@@ -45,7 +45,6 @@ def cpu_hours_for_window(days):
 
     resp = s.execute()
     return int(resp.aggregations.CoreHours.value) 
-
 
 def main():
     hours = map(cpu_hours_for_window, [30, 90, 365])
