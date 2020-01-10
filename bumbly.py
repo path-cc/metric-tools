@@ -1,37 +1,9 @@
 #!/usr/bin/python
 
-import os
 import json
 import datetime
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
-
-html_template = """\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<title>OSG CPU Hours</title>
-<style>
-table {{font-family: monospace}}
-td {{text-align: center}}
-</style>
-</head>
-<body>
-<h2>OSG CPU Hours for CC*</h2>
-<table border=1>
-<tr>
-<th>Last 30 Days</th>
-<th>Last 90 Days</th>
-<th>Last 365 Days</th>
-</tr>
-<tr>
-<td>{last30d:,}</td>
-<td>{last90d:,}</td>
-<td>{last365d:,}</td>
-</tr>
-</table>
-</body>
-</html>"""
 
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
@@ -76,16 +48,8 @@ def cpu_hours_for_window(days):
 
 
 def main():
-    last30d = cpu_hours_for_window(30)
-    last90d = cpu_hours_for_window(90)
-    last365d = cpu_hours_for_window(365)
-
-    print(html_template.format(**locals()))
-
-    jpath = "/dev/fd/999"
-    if os.path.exists(jpath):
-        with open(jpath, "w") as j:
-            json.dump([last30d, last90d, last365d], j)
+    hours = map(cpu_hours_for_window, [30, 90, 365])
+    print json.dumps(map("{:,}".format, hours))
 
 if __name__ == '__main__':
     main()

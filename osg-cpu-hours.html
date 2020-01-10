@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OSG CPU Hours</title>
+<style>
+table {font-family: monospace}
+td {text-align: center}
+</style>
+<script src="https://code.jquery.com/jquery-3.4.1.js"></script>
+</head>
+<body>
+<h2>OSG CPU Hours for CC*</h2>
+<table border=1>
+<tr>
+<th>Last 30 Days</th>
+<th>Last 90 Days</th>
+<th>Last 365 Days</th>
+</tr>
+<tr id="osg_hours_row">
+</tr>
+</table>
+<script>
+(function() {
+  $.getJSON(
+    document.location.pathname.split('/').slice(-1)[0].split('.')[0] + '.json')
+    .done(function(data) {
+      $.each(data, function(i, x) {
+        $("<td>" + x + "</td>").appendTo("#osg_hours_row");
+      });
+    });
+})();
+</script>
+</body>
+</html>
