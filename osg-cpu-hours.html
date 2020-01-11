@@ -13,11 +13,16 @@ td {text-align: center}
 <h2>OSG CPU Hours for CC*</h2>
 <table border=1>
 <tr>
+<th></th>
 <th>Last 30 Days</th>
 <th>Last 90 Days</th>
 <th>Last 365 Days</th>
 </tr>
 <tr id="osg_hours_row">
+<th>CPU Core Hours</th>
+</tr>
+<tr id="fqdn_count_row">
+<th>CEs Reporting</th>
 </tr>
 </table>
 <script>
@@ -25,8 +30,11 @@ td {text-align: center}
   $.getJSON(
     document.location.pathname.split('/').slice(-1)[0].split('.')[0] + '.json')
     .done(function(data) {
-      $.each(data, function(i, x) {
+      $.each(data.hours, function(i, x) {
         $("<td>" + x + "</td>").appendTo("#osg_hours_row");
+      });
+      $.each(data.fqdn_counts, function(i, x) {
+        $("<td>" + x + "</td>").appendTo("#fqdn_count_row");
       });
     });
 })();

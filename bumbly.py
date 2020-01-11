@@ -41,14 +41,18 @@ def cpu_hours_for_window(days):
         ]
     )
 
-    curBucket = s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
+    #curBucket =
+    s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
+    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
 
     resp = s.execute()
-    return int(resp.aggregations.CoreHours.value) 
+    aggs = resp.aggregations
+    return int(aggs.CoreHours.value), aggs.FQDN_count.value
 
 def main():
-    hours = map(cpu_hours_for_window, [30, 90, 365])
-    print json.dumps(map("{:,}".format, hours))
+    hours, fqdn_counts = zip(*map(cpu_hours_for_window, [30, 90, 365]))
+    data = {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
+    print json.dumps(data)
 
 if __name__ == '__main__':
     main()
