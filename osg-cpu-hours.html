@@ -25,16 +25,38 @@ td {text-align: center}
 <th>CEs Reporting</th>
 </tr>
 </table>
+<h2>OSG CPU Hours for CC* GPU jobs</h2>
+<table border=1>
+<tr>
+<th></th>
+<th>Last 30 Days</th>
+<th>Last 90 Days</th>
+<th>Last 365 Days</th>
+</tr>
+<tr id="osg_hours_gpus_row">
+<th>CPU Core Hours</th>
+</tr>
+<tr id="fqdn_count_gpus_row">
+<th>CEs Reporting</th>
+</tr>
+</table>
 <script>
 (function() {
   $.getJSON(
     document.location.pathname.split('/').slice(-1)[0].split('.')[0] + '.json')
     .done(function(data) {
-      $.each(data.hours, function(i, x) {
+      $.each(data.all.hours, function(i, x) {
         $("<td>" + x + "</td>").appendTo("#osg_hours_row");
       });
-      $.each(data.fqdn_counts, function(i, x) {
+      $.each(data.all.fqdn_counts, function(i, x) {
         $("<td>" + x + "</td>").appendTo("#fqdn_count_row");
+      });
+      // GPU jobs
+      $.each(data.gpu.hours, function(i, x) {
+        $("<td>" + x + "</td>").appendTo("#osg_hours_gpus_row");
+      });
+      $.each(data.gpu.fqdn_counts, function(i, x) {
+        $("<td>" + x + "</td>").appendTo("#fqdn_count_gpus_row");
       });
     });
 })();

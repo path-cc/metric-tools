@@ -26,20 +26,23 @@ CC_star_fqdns = [
 #WC = reduce((lambda a,b:a|b),
 #            ( Q('wildcard', ProbeName=p) for p in CC_star_probenames ))
 
-def cpu_hours_for_window(days):
+def cpu_hours_for_window(days, extra_filters=None):
     s = Search(using=es, index=jobs_summary_index)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
     starttime =  endtime - datetime.timedelta(days)
 
-    s = s.query('bool',
-            filter=[
-             Q('range', EndTime={'gte': starttime, 'lt': endtime })
-          &  Q('term',  ResourceType='Batch')
-          &  Q('terms', OIM_FQDN=CC_star_fqdns)
-          & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
-          & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
-        ]
+    filters = (
+            Q('range', EndTime={'gte': starttime, 'lt': endtime })
+         &  Q('term',  ResourceType='Batch')
+         &  Q('terms', OIM_FQDN=CC_star_fqdns)
+         & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
+         & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
     )
+
+    if extra_filters is not None:
+        filters = filters & extra_filters
+
+    s = s.query('bool', filter=[filters])
 
     #curBucket =
     s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
@@ -49,10 +52,20 @@ def cpu_hours_for_window(days):
     aggs = resp.aggregations
     return int(aggs.CoreHours.value), aggs.FQDN_count.value
 
+def cpu_hours_for_window_gpus(days):
+    extra_filters = Q('range', GPUs={'gte': 1})
+    return cpu_hours_for_window(days, extra_filters)
+
+def get_table_data(fn):
+    hours, fqdn_counts = zip(*map(fn, [30, 90, 365]))
+    return {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
+
 def main():
-    hours, fqdn_counts = zip(*map(cpu_hours_for_window, [30, 90, 365]))
-    data = {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
-    print json.dumps(data)
+    json_data = {
+        'all': get_table_data(cpu_hours_for_window),
+        'gpu': get_table_data(cpu_hours_for_window_gpus)
+    }
+    print json.dumps(json_data)
 
 if __name__ == '__main__':
     main()
