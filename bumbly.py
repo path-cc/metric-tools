@@ -61,11 +61,16 @@ def get_table_data(fn):
     return {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
 
 def main():
-    json_data = {
-        'all': get_table_data(cpu_hours_for_window),
-        'gpu': get_table_data(cpu_hours_for_window_gpus)
+    windows = [30, 90, 365]
+    hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
+    hours_gpu, fqdn_counts_gpu = zip(*map(cpu_hours_for_window_gpus, windows))
+    data = {
+        'hours_all': map("{:,}".format, hours_all),
+        'hours_gpu': map("{:,}".format, hours_gpu),
+        'fqdn_counts_all': fqdn_counts_all,
+        'fqdn_counts_gpu': fqdn_counts_gpu
     }
-    print json.dumps(json_data)
+    print json.dumps(data)
 
 if __name__ == '__main__':
     main()
