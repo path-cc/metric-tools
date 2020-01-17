@@ -26,7 +26,7 @@ CC_star_fqdns = [
 #WC = reduce((lambda a,b:a|b),
 #            ( Q('wildcard', ProbeName=p) for p in CC_star_probenames ))
 
-def cpu_hours_for_window(days, extra_filters=None):
+def cpu_hours_for_window(days):
     s = Search(using=es, index=jobs_summary_index)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
     starttime =  endtime - datetime.timedelta(days)
@@ -39,12 +39,8 @@ def cpu_hours_for_window(days, extra_filters=None):
          & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
     )
 
-    if extra_filters is not None:
-        filters = filters & extra_filters
-
     s = s.query('bool', filter=[filters])
 
-    #curBucket =
     s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
     s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
 
@@ -52,9 +48,33 @@ def cpu_hours_for_window(days, extra_filters=None):
     aggs = resp.aggregations
     return int(aggs.CoreHours.value), aggs.FQDN_count.value
 
-def cpu_hours_for_window_gpus(days):
-    extra_filters = Q('range', GPUs={'gte': 1})
-    return cpu_hours_for_window(days, extra_filters)
+def gpu_hours_for_window(days):
+    s = Search(using=es, index=jobs_summary_index)
+    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
+    starttime =  endtime - datetime.timedelta(days)
+
+    filters = (
+            Q('range', EndTime={'gte': starttime, 'lt': endtime })
+         &  Q('range', GPUs={'gte': 1})
+         &  Q('term',  ResourceType='Batch')
+         &  Q('terms', OIM_FQDN=CC_star_fqdns)
+         & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
+         & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
+    )
+
+    s = s.query('bool', filter=[filters])
+
+    curBucket = s.aggs.bucket('GPUs', 'terms', field='GPUs')
+    curBucket.bucket('WallDuration', 'sum', field='WallDuration')
+    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
+
+    resp = s.execute()
+    aggs = resp.aggregations
+
+    gpu_hours = int(sum( b.WallDuration.value * int(b.key) / 3600.0
+                         for b in aggs.GPUs.buckets ))
+
+    return gpu_hours, aggs.FQDN_count.value
 
 def get_table_data(fn):
     hours, fqdn_counts = zip(*map(fn, [30, 90, 365]))
@@ -63,7 +83,7 @@ def get_table_data(fn):
 def main():
     windows = [30, 90, 365]
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
-    hours_gpu, fqdn_counts_gpu = zip(*map(cpu_hours_for_window_gpus, windows))
+    hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
     data = {
         'hours_all': map("{:,}".format, hours_all),
         'hours_gpu': map("{:,}".format, hours_gpu),
