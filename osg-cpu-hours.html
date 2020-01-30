@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>OSG CC* Hours</title>
 <style>
-table {font-family: monospace}
+p, table {font-family: monospace}
 td {text-align: center}
 </style>
 <script src="jquery-3.4.1.js"></script>
@@ -41,6 +41,8 @@ td {text-align: center}
 <th>CEs Reporting</th>
 </tr>
 </table>
+<br/><br/>
+<p id="last_update">Last updated: </p>
 <script>
 (function() {
   $.getJSON(
@@ -59,6 +61,7 @@ td {text-align: center}
       $.each(data.fqdn_counts_gpu, function(i, x) {
         $("<td>" + x + "</td>").appendTo("#fqdn_count_gpus_row");
       });
+      $("<span>" + data.last_update + "</span>").appendTo("#last_update");
     });
 })();
 </script>

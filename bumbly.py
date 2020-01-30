@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import json
+import time
 import datetime
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
@@ -84,11 +85,13 @@ def main():
     windows = [30, 90, 365]
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
     hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
+    today = time.strftime('%Y-%m-%d')
     data = {
         'hours_all': map("{:,}".format, hours_all),
         'hours_gpu': map("{:,}".format, hours_gpu),
         'fqdn_counts_all': fqdn_counts_all,
-        'fqdn_counts_gpu': fqdn_counts_gpu
+        'fqdn_counts_gpu': fqdn_counts_gpu,
+        'last_update': today,
     }
     print json.dumps(data)
 
