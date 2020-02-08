@@ -81,19 +81,78 @@ def get_table_data(fn):
     hours, fqdn_counts = zip(*map(fn, [30, 90, 365]))
     return {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
 
+
+# now for queries matching gracc dashboard
+
+osg_connect = (
+       Q('term', ResourceType='Payload')
+    &  Q('term', ReportableVOName='osg')
+)
+
+multi_inst = (
+       Q('term',  ResourceType='Payload')
+    &  Q('terms', ReportableVOName=['SBGrid', 'des', 'dune', 'fermilab',
+                                    'gluex', 'icecube', 'ligo', 'lsst'])
+)
+
+campus_orgs = (
+       Q('term', ResourceType='Batch')
+    &  Q('terms', VOName=['hcc', 'glow', 'suragrid'])
+)
+
+gpu_usage = (
+       Q('term',  ResourceType='Payload')
+    &  Q('range', GPUs={'gte': 1})
+)
+
+def cpu_hours_for_window_filters(days, extra_filters):
+    s = Search(using=es, index=jobs_summary_index)
+    #endtime = datetime.datetime.now() - datetime.timedelta(1)
+    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
+    starttime = endtime - datetime.timedelta(days)
+
+    filters = (
+            Q('range', EndTime={'gte': starttime, 'lt': endtime })
+         &  extra_filters
+    )
+
+    s = s.query('bool', filter=[filters])
+
+    s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
+
+    resp = s.execute()
+    aggs = resp.aggregations
+    return int(aggs.CoreHours.value)
+
+def get_panel_row(extra_filters):
+    windows = [1, 30, 365]
+    d1 = [ cpu_hours_for_window_filters(d, extra_filters) for d in windows ]
+    return map("{:,}".format, d1)
+
+def m2():
+    return dict(
+        osg_connect = get_panel_row(osg_connect),
+        multi_inst  = get_panel_row(multi_inst),
+        campus_orgs = get_panel_row(campus_orgs),
+        gpu_usage   = get_panel_row(gpu_usage),
+        all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs),
+    )
+
 def main():
     windows = [30, 90, 365]
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
     hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
-    today = time.strftime('%Y-%m-%d')
-    data = {
-        'hours_all': map("{:,}".format, hours_all),
-        'hours_gpu': map("{:,}".format, hours_gpu),
-        'fqdn_counts_all': fqdn_counts_all,
-        'fqdn_counts_gpu': fqdn_counts_gpu,
-        'last_update': today,
-    }
+    unix_ts = int(time.time())
+    data = dict(
+        hours_all = map("{:,}".format, hours_all),
+        hours_gpu = map("{:,}".format, hours_gpu),
+        fqdn_counts_all = fqdn_counts_all,
+        fqdn_counts_gpu = fqdn_counts_gpu,
+        last_update = unix_ts,
+        **m2()
+    )
     print json.dumps(data)
+
 
 if __name__ == '__main__':
     main()
