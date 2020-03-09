@@ -87,12 +87,14 @@ def get_table_data(fn):
 osg_connect = (
        Q('term', ResourceType='Payload')
     &  Q('term', ReportableVOName='osg')
+    &  Q('wildcard', OIM_Organization='*')
 )
 
 multi_inst = (
        Q('term',  ResourceType='Payload')
     &  Q('terms', ReportableVOName=['SBGrid', 'des', 'dune', 'fermilab',
                                     'gluex', 'icecube', 'ligo', 'lsst'])
+    &  Q('wildcard', OIM_Organization='*')
 )
 
 campus_orgs = (
