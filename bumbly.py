@@ -107,6 +107,12 @@ gpu_usage = (
     &  Q('range', GPUs={'gte': 1})
 )
 
+amnh_usage = (
+       Q('term', ResourceType='Payload')
+    &  Q('term', SiteName='AMNH')
+)
+
+
 def cpu_hours_for_window_filters(days, extra_filters):
     s = Search(using=es, index=jobs_summary_index)
     #endtime = datetime.datetime.now() - datetime.timedelta(1)
@@ -138,6 +144,7 @@ def m2():
         campus_orgs = get_panel_row(campus_orgs),
         gpu_usage   = get_panel_row(gpu_usage),
         all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs),
+        amnh_usage  = get_panel_row(amnh_usage)
     )
 
 def main():
