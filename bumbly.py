@@ -19,7 +19,9 @@ CC_star_fqdns = [
     "hosted-ce22.grid.uchicago.edu",
     "hosted-ce30.grid.uchicago.edu",
     "pearc-ce-2.grid.uchicago.edu",
-    "hosted-ce33.grid.uchicago.edu"
+    "hosted-ce33.grid.uchicago.edu",
+    "hosted-ce35.grid.uchicago.edu",
+    "hosted-ce28.grid.uchicago.edu"
 ]
 
 #CC_star_probenames = [ "*:%s" % f for f in CC_star_fqdns ]
