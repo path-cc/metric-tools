@@ -114,6 +114,10 @@ amnh_usage = (
     &  Q('term', SiteName='AMNH')
 )
 
+cc_star_usage = (
+       Q('term',  ResourceType='Batch')
+    &  Q('terms', OIM_FQDN=CC_star_fqdns)
+)
 
 def cpu_hours_for_window_filters(days, extra_filters):
     s = Search(using=es, index=jobs_summary_index)
@@ -147,6 +151,7 @@ def m2():
         gpu_usage   = get_panel_row(gpu_usage),
         all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs),
         amnh_usage  = get_panel_row(amnh_usage)
+        cc_star_usage = get_panel_row(cc_star_usage)
     )
 
 def main():
