@@ -154,12 +154,14 @@ def main():
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
     hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
     unix_ts = int(time.time())
+    human_ts = time.strftime("%F %H:%M", time.localtime(unix_ts))
     data = dict(
         hours_all = map("{:,}".format, hours_all),
         hours_gpu = map("{:,}".format, hours_gpu),
         fqdn_counts_all = fqdn_counts_all,
         fqdn_counts_gpu = fqdn_counts_gpu,
         last_update = unix_ts,
+        last_update_str = human_ts,
         **m2()
     )
     print json.dumps(data)
