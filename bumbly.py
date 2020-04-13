@@ -150,7 +150,7 @@ def m2():
         campus_orgs = get_panel_row(campus_orgs),
         gpu_usage   = get_panel_row(gpu_usage),
         all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs),
-        amnh_usage  = get_panel_row(amnh_usage)
+        amnh_usage  = get_panel_row(amnh_usage),
         cc_star_usage = get_panel_row(cc_star_usage)
     )
 
