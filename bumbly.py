@@ -110,7 +110,7 @@ gpu_usage = (
 )
 
 amnh_usage = (
-       Q('term', ResourceType='Payload')
+       Q('term', ResourceType='Batch')
     &  Q('term', SiteName='AMNH')
 )
 
