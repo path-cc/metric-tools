@@ -111,7 +111,7 @@ gpu_usage = (
 
 amnh_usage = (
        Q('term', ResourceType='Batch')
-    &  Q('term', SiteName='AMNH')
+    &  Q('term', OIM_Site='AMNH')
 )
 
 cc_star_usage = (
