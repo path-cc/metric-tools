@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import sys
 import json
 import time
 import datetime
@@ -164,7 +165,7 @@ def m2():
         cc_star_count = cc_star_count
     )
 
-def main():
+def main(args):
     windows = [30, 90, 365]
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
     hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
@@ -179,9 +180,15 @@ def main():
         last_update_str = human_ts,
         **m2()
     )
-    print json.dumps(data)
+
+    if len(args) == 2 and args[0] == '-o':
+        out = open(args[1], "w")
+    else:
+        out = sys.stdout
+
+    print >>out, json.dumps(data)
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
 
