@@ -21,6 +21,7 @@ CC_star_fqdns = [
     "pearc-ce-2.grid.uchicago.edu",
     "hosted-ce33.grid.uchicago.edu",
     "hosted-ce35.grid.uchicago.edu",
+    "hosted-ce36.grid.uchicago.edu",
     "hosted-ce28.grid.uchicago.edu"
 ]
 
