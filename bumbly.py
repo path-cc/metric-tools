@@ -134,25 +134,33 @@ def cpu_hours_for_window_filters(days, extra_filters):
     s = s.query('bool', filter=[filters])
 
     s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
+    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
 
     resp = s.execute()
     aggs = resp.aggregations
-    return int(aggs.CoreHours.value)
+    return int(aggs.CoreHours.value), aggs.FQDN_count.value
 
 def get_panel_row(extra_filters):
     windows = [1, 30, 365]
-    d1 = [ cpu_hours_for_window_filters(d, extra_filters) for d in windows ]
-    return map("{:,}".format, d1)
+    def cpu_hours_for_window(d):
+        return cpu_hours_for_window_filters(d, extra_filters)
+
+    hours, count = zip(*map(cpu_hours_for_window, windows))
+    return map("{:,}".format, hours), count
 
 def m2():
+    amnh_hours,    amnh_count    = get_panel_row(amnh_usage)
+    cc_star_hours, cc_star_count = get_panel_row(cc_star_usage)
     return dict(
-        osg_connect = get_panel_row(osg_connect),
-        multi_inst  = get_panel_row(multi_inst),
-        campus_orgs = get_panel_row(campus_orgs),
-        gpu_usage   = get_panel_row(gpu_usage),
-        all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs),
-        amnh_usage  = get_panel_row(amnh_usage),
-        cc_star_usage = get_panel_row(cc_star_usage)
+        osg_connect = get_panel_row(osg_connect)[0],
+        multi_inst  = get_panel_row(multi_inst)[0],
+        campus_orgs = get_panel_row(campus_orgs)[0],
+        gpu_usage   = get_panel_row(gpu_usage)[0],
+        all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs)[0],
+        amnh_usage  = amnh_hours,
+        amnh_count  = amnh_count,
+        cc_star_usage = cc_star_hours,
+        cc_star_count = cc_star_count
     )
 
 def main():
