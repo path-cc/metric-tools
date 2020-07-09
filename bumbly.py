@@ -7,6 +7,8 @@ import datetime
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
 
+import cc_star_fqdns
+
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
 es = elasticsearch.Elasticsearch(
@@ -16,21 +18,7 @@ es = elasticsearch.Elasticsearch(
 jobs_raw_index = 'gracc.osg.raw-*'
 jobs_summary_index = 'gracc.osg.summary'
 
-CC_star_fqdns = [
-    "hosted-ce22.grid.uchicago.edu",
-    "hosted-ce30.grid.uchicago.edu",
-    "pearc-ce-2.grid.uchicago.edu",
-    "hosted-ce33.grid.uchicago.edu",
-    "hosted-ce35.grid.uchicago.edu",
-    "hosted-ce36.grid.uchicago.edu",
-    "hosted-ce28.grid.uchicago.edu",
-    "hosted-ce37.opensciencegrid.org",
-]
-
-#CC_star_probenames = [ "*:%s" % f for f in CC_star_fqdns ]
-#
-#WC = reduce((lambda a,b:a|b),
-#            ( Q('wildcard', ProbeName=p) for p in CC_star_probenames ))
+CC_star_fqdns = cc_star_fqdns.get_cc_star_fqdns_prod()
 
 def cpu_hours_for_window(days):
     s = Search(using=es, index=jobs_summary_index)
