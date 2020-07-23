@@ -149,17 +149,19 @@ def get_panel_row(extra_filters):
 def m2():
     amnh_hours,    amnh_count    = get_panel_row(amnh_usage)
     cc_star_hours, cc_star_count = get_panel_row(cc_star_usage)
+    cc_star_gpu_hours, cc_star_gpu_count = get_panel_row(cc_star_gpu)
     return dict(
         osg_connect = get_panel_row(osg_connect)[0],
         multi_inst  = get_panel_row(multi_inst)[0],
         campus_orgs = get_panel_row(campus_orgs)[0],
         gpu_usage   = get_panel_row(gpu_usage)[0],
-        cc_star_gpu = get_panel_row(cc_star_gpu)[0],
         all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs)[0],
         amnh_usage  = amnh_hours,
         amnh_count  = amnh_count,
         cc_star_usage = cc_star_hours,
-        cc_star_count = cc_star_count
+        cc_star_count = cc_star_count,
+        cc_star_gpu_usage = cc_star_gpu_hours,
+        cc_star_gpu_count = cc_star_gpu_count,
     )
 
 def main(args):
