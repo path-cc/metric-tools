@@ -100,6 +100,13 @@ gpu_usage = (
     &  Q('range', GPUs={'gte': 1})
 )
 
+cc_star_gpu = (
+       Q('term',  ResourceType='Payload')
+    &  Q('range', GPUs={'gte': 1})
+    &  Q('terms', OIM_FQDN=CC_star_fqdns)
+)
+
+
 amnh_usage = (
        Q('term',  ResourceType='Batch')
     &  Q('term',  OIM_Site='AMNH')
@@ -147,6 +154,7 @@ def m2():
         multi_inst  = get_panel_row(multi_inst)[0],
         campus_orgs = get_panel_row(campus_orgs)[0],
         gpu_usage   = get_panel_row(gpu_usage)[0],
+        cc_star_gpu = get_panel_row(cc_star_gpu)[0],
         all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs)[0],
         amnh_usage  = amnh_hours,
         amnh_count  = amnh_count,
