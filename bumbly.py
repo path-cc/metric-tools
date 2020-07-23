@@ -185,7 +185,7 @@ def main(args):
     else:
         out = sys.stdout
 
-    print >>out, json.dumps(data)
+    print >>out, json.dumps(data, indent=1, sort_keys=True)
 
 
 if __name__ == '__main__':
