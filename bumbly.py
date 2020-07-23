@@ -4,6 +4,7 @@ import sys
 import json
 import time
 import datetime
+import collections
 import elasticsearch
 from elasticsearch_dsl import Search, A, Q
 
@@ -100,7 +101,7 @@ gpu_usage = (
     &  Q('range', GPUs={'gte': 1})
 )
 
-cc_star_gpu = (
+cc_star_gpu_usage = (
        Q('term',  ResourceType='Payload')
     &  Q('range', GPUs={'gte': 1})
     &  Q('terms', OIM_FQDN=CC_star_fqdns)
@@ -138,30 +139,36 @@ def cpu_hours_for_window_filters(days, extra_filters):
     aggs = resp.aggregations
     return int(aggs.CoreHours.value), aggs.FQDN_count.value
 
+
+HoursCount = collections.namedtuple("HoursCount", ['hours', 'count'])
+
 def get_panel_row(extra_filters):
     windows = [1, 30, 365]
     def cpu_hours_for_window(d):
         return cpu_hours_for_window_filters(d, extra_filters)
 
     hours, count = zip(*map(cpu_hours_for_window, windows))
-    return map("{:,}".format, hours), count
+    return HoursCount(map("{:,}".format, hours), count)
 
 def m2():
-    amnh_hours,    amnh_count    = get_panel_row(amnh_usage)
-    cc_star_hours, cc_star_count = get_panel_row(cc_star_usage)
-    cc_star_gpu_hours, cc_star_gpu_count = get_panel_row(cc_star_gpu)
+    amnh        = get_panel_row(amnh_usage)
+    cc_star     = get_panel_row(cc_star_usage)
+    cc_star_gpu = get_panel_row(cc_star_gpu_usage)
+
+    all_non_lhc = osg_connect | multi_inst | campus_orgs
+
     return dict(
-        osg_connect = get_panel_row(osg_connect)[0],
-        multi_inst  = get_panel_row(multi_inst)[0],
-        campus_orgs = get_panel_row(campus_orgs)[0],
-        gpu_usage   = get_panel_row(gpu_usage)[0],
-        all_non_lhc = get_panel_row(osg_connect | multi_inst | campus_orgs)[0],
-        amnh_usage  = amnh_hours,
-        amnh_count  = amnh_count,
-        cc_star_usage = cc_star_hours,
-        cc_star_count = cc_star_count,
-        cc_star_gpu_usage = cc_star_gpu_hours,
-        cc_star_gpu_count = cc_star_gpu_count,
+        osg_connect = get_panel_row(osg_connect).hours,
+        multi_inst  = get_panel_row(multi_inst).hours,
+        campus_orgs = get_panel_row(campus_orgs).hours,
+        gpu_usage   = get_panel_row(gpu_usage).hours,
+        all_non_lhc = get_panel_row(all_non_lhc).hours,
+        amnh_usage  = amnh.hours,
+        amnh_count  = amnh.count,
+        cc_star_usage = cc_star.hours,
+        cc_star_count = cc_star.count,
+        cc_star_gpu_usage = cc_star_gpu.hours,
+        cc_star_gpu_count = cc_star_gpu.count,
     )
 
 def main(args):
