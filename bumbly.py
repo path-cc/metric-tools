@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import re
 import sys
 import json
 import time
@@ -171,6 +172,15 @@ def m2():
         cc_star_gpu_count = cc_star_gpu.count,
     )
 
+
+def list_collapse(m):
+    return json.dumps(json.loads(m.group()))
+
+def prettyd(d):
+    dat = json.dumps(d, indent=1, sort_keys=True)
+    return re.sub(r'\[[^]{}]*\]', list_collapse, dat)
+
+
 def main(args):
     windows = [30, 90, 365]
     hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
@@ -192,7 +202,7 @@ def main(args):
     else:
         out = sys.stdout
 
-    print >>out, json.dumps(data, indent=1, sort_keys=True)
+    print >>out, prettyd(data)
 
 
 if __name__ == '__main__':
