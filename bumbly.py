@@ -22,59 +22,6 @@ jobs_summary_index = 'gracc.osg.summary'
 
 CC_star_fqdns = cc_star_fqdns.get_cc_star_fqdns_prod()
 
-def cpu_hours_for_window(days):
-    s = Search(using=es, index=jobs_summary_index)
-    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
-    starttime =  endtime - datetime.timedelta(days)
-
-    filters = (
-            Q('range', EndTime={'gte': starttime, 'lt': endtime })
-         &  Q('term',  ResourceType='Batch')
-         &  Q('terms', OIM_FQDN=CC_star_fqdns)
-         & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
-         & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
-    )
-
-    s = s.query('bool', filter=[filters])
-
-    s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
-    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
-
-    resp = s.execute()
-    aggs = resp.aggregations
-    return int(aggs.CoreHours.value), aggs.FQDN_count.value
-
-def gpu_hours_for_window(days):
-    s = Search(using=es, index=jobs_summary_index)
-    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
-    starttime =  endtime - datetime.timedelta(days)
-
-    filters = (
-            Q('range', EndTime={'gte': starttime, 'lt': endtime })
-         &  Q('range', GPUs={'gte': 1})
-         &  Q('term',  ResourceType='Batch')
-         &  Q('terms', OIM_FQDN=CC_star_fqdns)
-         & ~Q('terms', SiteName=['NONE', 'Generic', 'Obsolete'])
-         & ~Q('terms', VOName=['Unknown', 'unknown', 'other'])
-    )
-
-    s = s.query('bool', filter=[filters])
-
-    curBucket = s.aggs.bucket('GPUs', 'terms', field='GPUs')
-    curBucket.bucket('WallDuration', 'sum', field='WallDuration')
-    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
-
-    resp = s.execute()
-    aggs = resp.aggregations
-
-    gpu_hours = int(sum( b.WallDuration.value * int(b.key) / 3600.0
-                         for b in aggs.GPUs.buckets ))
-
-    return gpu_hours, aggs.FQDN_count.value
-
-def get_table_data(fn):
-    hours, fqdn_counts = zip(*map(fn, [30, 90, 365]))
-    return {'hours': map("{:,}".format, hours), 'fqdn_counts': fqdn_counts}
 
 
 # now for queries matching gracc dashboard
@@ -182,16 +129,9 @@ def prettyd(d):
 
 
 def main(args):
-    windows = [30, 90, 365]
-    hours_all, fqdn_counts_all = zip(*map(cpu_hours_for_window, windows))
-    hours_gpu, fqdn_counts_gpu = zip(*map(gpu_hours_for_window, windows))
     unix_ts = int(time.time())
     human_ts = time.strftime("%F %H:%M", time.localtime(unix_ts))
     data = dict(
-        hours_all = map("{:,}".format, hours_all),
-        hours_gpu = map("{:,}".format, hours_gpu),
-        fqdn_counts_all = fqdn_counts_all,
-        fqdn_counts_gpu = fqdn_counts_gpu,
         last_update = unix_ts,
         last_update_str = human_ts,
         **m2()
