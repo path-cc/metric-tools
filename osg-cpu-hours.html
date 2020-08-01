@@ -5,7 +5,8 @@
 <title>OSG Hours</title>
 <style>
 p, table {font-family: monospace}
-td {text-align: center}
+td {text-align: right}
+th {text-align: left}
 </style>
 <script src="jquery-3.4.1.js"></script>
 </head>
@@ -63,6 +64,45 @@ td {text-align: center}
 
 <br/><br/>
 
+
+<h3>CC*</h3>
+<table border=1>
+
+<tr>
+  <th></th>
+  <th>Last 24 Hours</th>
+  <th>Last 30 Days</th>
+  <th>Last 12 Months</th>
+</tr>
+
+<tr id="cc_star_usage_row">
+  <th>All CC&#42;</th>
+</tr>
+
+<tr id="cc_star_count_row">
+  <th># CEs Reporting</th>
+</tr>
+
+<tr id="amnh_usage_row">
+  <th>AMNH CC&#42;</th>
+</tr>
+
+<tr id="amnh_count_row">
+  <th># CEs Reporting</th>
+</tr>
+
+<tr id="cc_star_gpu_usage_row">
+  <th>CC&#42; GPU Utilization</th>
+</tr>
+
+<tr id="cc_star_gpu_count_row">
+  <th># CEs Reporting</th>
+</tr>
+
+</table>
+
+<br/><br/>
+
 <hr/>
 
 <script>
@@ -80,14 +120,35 @@ td {text-align: center}
       $.each(data.campus_orgs, function(i, x) {
         $("<td>" + x + "</td>").appendTo("#campus_orgs_row");
       });
-      $.each(data.gpu_usage, function(i, x) {
-        $("<td>" + x + "</td>").appendTo("#gpu_usage_row");
+
+      $.each(data.amnh_usage, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#amnh_usage_row");
+      });
+      $.each(data.amnh_count, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#amnh_count_row");
+      });
+      $.each(data.cc_star_usage, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#cc_star_usage_row");
+      });
+      $.each(data.cc_star_count, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#cc_star_count_row");
       });
       $.each(data.all_non_lhc, function(i, x) {
-        $("<td>" + x + "</td>").appendTo("#all_non_lhc_row");
+        $('<td>' + x + "</td>").appendTo("#all_non_lhc_row");
       });
+      $.each(data.gpu_usage, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#gpu_usage_row");
+      });
+      $.each(data.cc_star_gpu_usage, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#cc_star_gpu_usage_row");
+      });
+      $.each(data.cc_star_gpu_count, function(i, x) {
+        $('<td>' + x + "</td>").appendTo("#cc_star_gpu_count_row");
+      });
+
     });
 })();
 </script>
+
 </body>
 </html>
