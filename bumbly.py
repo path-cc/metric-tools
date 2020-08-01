@@ -67,7 +67,7 @@ cc_star_usage = (
     &  Q('terms', OIM_FQDN=CC_star_fqdns)
 )
 
-def cpu_hours_for_window_filters(days, extra_filters):
+def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     s = Search(using=es, index=jobs_summary_index)
     #endtime = datetime.datetime.now() - datetime.timedelta(1)
     endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
@@ -82,26 +82,29 @@ def cpu_hours_for_window_filters(days, extra_filters):
 
     s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
     s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
+    if want_fqdns:
+        s.aggs.bucket('FQDNs', 'terms', field='OIM_FQDN', size=100)
 
     resp = s.execute()
     aggs = resp.aggregations
-    return int(aggs.CoreHours.value), aggs.FQDN_count.value
+    fqdns = sorted( x.key for x in aggs.FQDNs.buckets ) if want_fqdns else []
+    return int(aggs.CoreHours.value), aggs.FQDN_count.value, fqdns
 
 
-HoursCount = collections.namedtuple("HoursCount", ['hours', 'count'])
+HoursCount = collections.namedtuple("HoursCount", ['hours', 'count', 'fqdns'])
 
-def get_panel_row(extra_filters):
+def get_panel_row(extra_filters, want_fqdns=False):
     windows = [1, 30, 365]
     def cpu_hours_for_window(d):
-        return cpu_hours_for_window_filters(d, extra_filters)
+        return cpu_hours_for_window_filters(d, extra_filters, want_fqdns)
 
-    hours, count = zip(*map(cpu_hours_for_window, windows))
-    return HoursCount(map("{:,}".format, hours), count)
+    hours, count, fqdns = zip(*map(cpu_hours_for_window, windows))
+    return HoursCount(map("{:,}".format, hours), count, fqdns)
 
 def m2():
     amnh        = get_panel_row(amnh_usage)
-    cc_star     = get_panel_row(cc_star_usage)
-    cc_star_gpu = get_panel_row(cc_star_gpu_usage)
+    cc_star     = get_panel_row(cc_star_usage, want_fqdns=True)
+    cc_star_gpu = get_panel_row(cc_star_gpu_usage, want_fqdns=True)
 
     all_non_lhc = osg_connect | multi_inst | campus_orgs
 
@@ -115,8 +118,10 @@ def m2():
         amnh_count  = amnh.count,
         cc_star_usage = cc_star.hours,
         cc_star_count = cc_star.count,
+        cc_star_fqdns = cc_star.fqdns,
         cc_star_gpu_usage = cc_star_gpu.hours,
         cc_star_gpu_count = cc_star_gpu.count,
+        cc_star_gpu_fqdns = cc_star_gpu.fqdns,
     )
 
 
@@ -125,7 +130,8 @@ def list_collapse(m):
 
 def prettyd(d):
     dat = json.dumps(d, indent=1, sort_keys=True)
-    return re.sub(r'\[[^]{}]*\]', list_collapse, dat)
+    #return re.sub(r'(?<=: )\[[^]{}[]*\]', list_collapse, dat)
+    return re.sub(r'\[[^]{}[]*\]', list_collapse, dat)
 
 
 def main(args):
