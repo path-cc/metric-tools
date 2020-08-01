@@ -7,13 +7,23 @@
 p, table {font-family: monospace}
 td {text-align: right}
 th {text-align: left}
+
+.c50 {
+    margin: auto;
+    max-width: 50%
+}
+.h2ts {
+    float: right;
+    font-size: small;
+}
 </style>
 <script src="jquery-3.4.1.js"></script>
 </head>
 <body>
 
+<div class="c50">
 
-<h2>OSG CPU Hours</h2>
+<h2 id="as_of_ts">OSG CPU Hours</h2>
 <h3>All Science except LHC Experiments</h3>
 <table border=1>
 
@@ -105,6 +115,8 @@ th {text-align: left}
 
 <hr/>
 
+</div>
+
 <script>
 (function() {
   $.getJSON(
@@ -145,6 +157,8 @@ th {text-align: left}
       $.each(data.cc_star_gpu_count, function(i, x) {
         $('<td>' + x + "</td>").appendTo("#cc_star_gpu_count_row");
       });
+
+      $('<span class="h2ts"> as of ' + data.last_update_str + "</span>").appendTo("#as_of_ts");
 
     });
 })();
