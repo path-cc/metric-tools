@@ -108,7 +108,7 @@ def get_panel_row(extra_filters, want_fqdns=False):
     return HoursCount(map("{:,}".format, hours), count, fqdns, resources)
 
 def m2():
-    amnh        = get_panel_row(amnh_usage)
+    amnh        = get_panel_row(amnh_usage, want_fqdns=True)
     cc_star     = get_panel_row(cc_star_usage, want_fqdns=True)
     cc_star_gpu = get_panel_row(cc_star_gpu_usage, want_fqdns=True)
 
@@ -122,6 +122,8 @@ def m2():
         all_non_lhc = get_panel_row(all_non_lhc).hours,
         amnh_usage  = amnh.hours,
         amnh_count  = amnh.count,
+        amnh_fqdns  = amnh.fqdns,
+        amnh_resources  = amnh.resources,
         cc_star_usage = cc_star.hours,
         cc_star_count = cc_star.count,
         cc_star_fqdns = cc_star.fqdns,
