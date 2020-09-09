@@ -16,6 +16,44 @@ th {text-align: left}
     float: right;
     font-size: small;
 }
+
+.tooltip {
+  position: relative;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -60px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tooltip .tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #555 transparent transparent transparent;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
 </style>
 <script src="jquery-3.4.1.js"></script>
 </head>
@@ -137,13 +175,21 @@ th {text-align: left}
         $('<td>' + x + "</td>").appendTo("#amnh_usage_row");
       });
       $.each(data.amnh_count, function(i, x) {
-        $('<td>' + x + "</td>").appendTo("#amnh_count_row");
+        $('<td class="tooltip">' + x
+          +   '<span class="tooltiptext">'
+          +     data.amnh_resources[i].join("<br/>")
+          +   '</span>'
+          + "</td>").appendTo("#amnh_count_row");
       });
       $.each(data.cc_star_usage, function(i, x) {
         $('<td>' + x + "</td>").appendTo("#cc_star_usage_row");
       });
       $.each(data.cc_star_count, function(i, x) {
-        $('<td>' + x + "</td>").appendTo("#cc_star_count_row");
+        $('<td class="tooltip">' + x
+          +   '<span class="tooltiptext">'
+          +     data.cc_star_resources[i].join("<br/>")
+          +   '</span>'
+          + "</td>").appendTo("#cc_star_count_row");
       });
       $.each(data.all_non_lhc, function(i, x) {
         $('<td>' + x + "</td>").appendTo("#all_non_lhc_row");
@@ -155,7 +201,11 @@ th {text-align: left}
         $('<td>' + x + "</td>").appendTo("#cc_star_gpu_usage_row");
       });
       $.each(data.cc_star_gpu_count, function(i, x) {
-        $('<td>' + x + "</td>").appendTo("#cc_star_gpu_count_row");
+        $('<td class="tooltip">' + x
+          +   '<span class="tooltiptext">'
+          +     data.cc_star_gpu_resources[i].join("<br/>")
+          +   '</span>'
+          + "</td>").appendTo("#cc_star_gpu_count_row");
       });
 
       $('<span class="h2ts"> as of ' + data.last_update_str + "</span>").appendTo("#as_of_ts");
