@@ -84,22 +84,28 @@ def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
     if want_fqdns:
         s.aggs.bucket('FQDNs', 'terms', field='OIM_FQDN', size=100)
+        s.aggs.bucket('Resources', 'terms', field='OIM_Resource', size=100)
 
     resp = s.execute()
     aggs = resp.aggregations
-    fqdns = sorted( x.key for x in aggs.FQDNs.buckets ) if want_fqdns else []
-    return int(aggs.CoreHours.value), aggs.FQDN_count.value, fqdns
+    if want_fqdns:
+        fqdns = sorted( x.key for x in aggs.FQDNs.buckets )
+        resources = sorted( x.key for x in aggs.Resources.buckets )
+    else:
+        fqdns, resources = [], []
+    return int(aggs.CoreHours.value), aggs.FQDN_count.value, fqdns, resources
 
 
-HoursCount = collections.namedtuple("HoursCount", ['hours', 'count', 'fqdns'])
+HoursCount = collections.namedtuple("HoursCount",
+        ['hours', 'count', 'fqdns', 'resources'])
 
 def get_panel_row(extra_filters, want_fqdns=False):
     windows = [1, 30, 365]
     def cpu_hours_for_window(d):
         return cpu_hours_for_window_filters(d, extra_filters, want_fqdns)
 
-    hours, count, fqdns = zip(*map(cpu_hours_for_window, windows))
-    return HoursCount(map("{:,}".format, hours), count, fqdns)
+    hours, count, fqdns, resources = zip(*map(cpu_hours_for_window, windows))
+    return HoursCount(map("{:,}".format, hours), count, fqdns, resources)
 
 def m2():
     amnh        = get_panel_row(amnh_usage)
@@ -119,9 +125,11 @@ def m2():
         cc_star_usage = cc_star.hours,
         cc_star_count = cc_star.count,
         cc_star_fqdns = cc_star.fqdns,
+        cc_star_resources = cc_star.resources,
         cc_star_gpu_usage = cc_star_gpu.hours,
         cc_star_gpu_count = cc_star_gpu.count,
         cc_star_gpu_fqdns = cc_star_gpu.fqdns,
+        cc_star_gpu_resources = cc_star_gpu.resources,
     )
 
 
