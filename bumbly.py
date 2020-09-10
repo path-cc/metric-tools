@@ -68,11 +68,6 @@ cc_star_usage = (
 )
 
 
-def fqdn_resource_sortkey(x):
-    fqdn, resource = x
-    domain = fqdn.split(".", 1)[-1]
-    return domain, x
-
 def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     s = Search(using=es, index=jobs_summary_index)
     #endtime = datetime.datetime.now() - datetime.timedelta(1)
@@ -95,11 +90,9 @@ def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     resp = s.execute()
     aggs = resp.aggregations
     if want_fqdns:
-        fqdns = ( (fqdn.key, resource.key)
-                  for fqdn in aggs.FQDNs.buckets
-                  for resource in fqdn.Resources.buckets )
-        fqdns = sorted(fqdns, key=fqdn_resource_sortkey)
-        fqdns = [ "%s (%s)" % fr for fr in fqdns ]
+        fqdns = sorted( "%s (%s)" % (resource.key, fqdn.key)
+                        for fqdn in aggs.FQDNs.buckets
+                        for resource in fqdn.Resources.buckets )
     else:
         fqdns = []
     return int(aggs.CoreHours.value), aggs.FQDN_count.value, fqdns
@@ -147,7 +140,7 @@ def list_collapse(m):
 def prettyd(d):
     dat = json.dumps(d, indent=1, sort_keys=True)
     #return re.sub(r'(?<=: )\[[^]{}[]*\]', list_collapse, dat)
-    return re.sub(r'\[[^]{}[]*\]', list_collapse, dat)
+    return re.sub(r'\[[^]{}[]{0,80}\]', list_collapse, dat)
 
 
 def main(args):
