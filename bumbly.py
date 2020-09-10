@@ -91,6 +91,12 @@ def cpu_hours_for_window_filters2(days, extra_filters, want_fqdns=False):
     resp = s.execute()
     return resp
 
+
+def fqdn_resource_sortkey(x):
+    fqdn, resource = x
+    domain = fqdn.split(".", 1)[-1]
+    return domain, x
+
 def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     s = Search(using=es, index=jobs_summary_index)
     #endtime = datetime.datetime.now() - datetime.timedelta(1)
@@ -118,9 +124,10 @@ def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     if want_fqdns:
         fqdns = sorted( x.key for x in aggs.FQDNs.buckets )
         resources = sorted( x.key for x in aggs.Resources.buckets )
-        fqdn_resources = sorted( (fqdn.key, resource.key)
-                                 for fqdn in aggs.FQDNs2.buckets
-                                 for resource in fqdn.Resources.buckets )
+        fqdn_resources = ( (fqdn.key, resource.key)
+                           for fqdn in aggs.FQDNs2.buckets
+                           for resource in fqdn.Resources.buckets )
+        fqdn_resources = sorted(fqdn_resources, key=fqdn_resource_sortkey)
         fqdn_resources = [ "%s (%s)" % fr for fr in fqdn_resources ]
     else:
         fqdns, resources, fqdn_resources = [], [], []
