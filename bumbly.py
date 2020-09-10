@@ -67,30 +67,6 @@ cc_star_usage = (
     &  Q('terms', OIM_FQDN=CC_star_fqdns)
 )
 
-def cpu_hours_for_window_filters2(days, extra_filters, want_fqdns=False):
-    s = Search(using=es, index=jobs_summary_index)
-    #endtime = datetime.datetime.now() - datetime.timedelta(1)
-    endtime = datetime.datetime.date(datetime.datetime.now()) # midnight today
-    starttime = endtime - datetime.timedelta(days)
-
-    filters = (
-            Q('range', EndTime={'gte': starttime, 'lt': endtime })
-         &  extra_filters
-    )
-
-    s = s.query('bool', filter=[filters])
-
-    s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
-    s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
-    if want_fqdns:
-        s.aggs.bucket('FQDNs', 'terms', field='OIM_FQDN', size=100)
-        s.aggs.bucket('Resources', 'terms', field='OIM_Resource', size=100)
-        s2 = s.aggs.bucket('FQDNs2', 'terms', field='OIM_FQDN', size=100)
-        s2.bucket('Resources', 'terms', field='OIM_Resource', size=100)
-
-    resp = s.execute()
-    return resp
-
 
 def fqdn_resource_sortkey(x):
     fqdn, resource = x
@@ -113,30 +89,23 @@ def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
     s.aggs.bucket('CoreHours', 'sum', field='CoreHours')
     s.aggs.bucket('FQDN_count', 'cardinality', field='OIM_FQDN')
     if want_fqdns:
-        s.aggs.bucket('FQDNs', 'terms', field='OIM_FQDN', size=100)
-        s.aggs.bucket('Resources', 'terms', field='OIM_Resource', size=100)
-
-        s2 = s.aggs.bucket('FQDNs2', 'terms', field='OIM_FQDN', size=100)
-        s2.bucket('Resources', 'terms', field='OIM_Resource', size=100)
+        s.aggs.bucket('FQDNs',     'terms', field='OIM_FQDN',     size=1000) \
+              .bucket('Resources', 'terms', field='OIM_Resource', size=1000)
 
     resp = s.execute()
     aggs = resp.aggregations
     if want_fqdns:
-        fqdns = sorted( x.key for x in aggs.FQDNs.buckets )
-        resources = sorted( x.key for x in aggs.Resources.buckets )
-        fqdn_resources = ( (fqdn.key, resource.key)
-                           for fqdn in aggs.FQDNs2.buckets
-                           for resource in fqdn.Resources.buckets )
-        fqdn_resources = sorted(fqdn_resources, key=fqdn_resource_sortkey)
-        fqdn_resources = [ "%s (%s)" % fr for fr in fqdn_resources ]
+        fqdns = ( (fqdn.key, resource.key)
+                  for fqdn in aggs.FQDNs.buckets
+                  for resource in fqdn.Resources.buckets )
+        fqdns = sorted(fqdns, key=fqdn_resource_sortkey)
+        fqdns = [ "%s (%s)" % fr for fr in fqdns ]
     else:
-        fqdns, resources, fqdn_resources = [], [], []
-    return (int(aggs.CoreHours.value), aggs.FQDN_count.value,
-            fqdns, resources, fqdn_resources)
+        fqdns = []
+    return int(aggs.CoreHours.value), aggs.FQDN_count.value, fqdns
 
 
-HoursCount = collections.namedtuple("HoursCount",
-        ['hours', 'count', 'fqdns', 'resources', 'fqdn_resources'])
+HoursCount = collections.namedtuple("HoursCount", ['hours', 'count', 'fqdns'])
 
 
 def testy():
@@ -147,10 +116,8 @@ def get_panel_row(extra_filters, want_fqdns=False):
     def cpu_hours_for_window(d):
         return cpu_hours_for_window_filters(d, extra_filters, want_fqdns)
 
-    hours, count, fqdns, resources, fqdn_resources = \
-            zip(*map(cpu_hours_for_window, windows))
-    return HoursCount(map("{:,}".format, hours), count,
-                      fqdns, resources, fqdn_resources)
+    hours, count, fqdns = zip(*map(cpu_hours_for_window, windows))
+    return HoursCount(map("{:,}".format, hours), count, fqdns)
 
 def m2():
     amnh        = get_panel_row(amnh_usage, want_fqdns=True)
@@ -168,18 +135,12 @@ def m2():
         amnh_usage  = amnh.hours,
         amnh_count  = amnh.count,
         amnh_fqdns  = amnh.fqdns,
-        amnh_resources  = amnh.resources,
-        amnh_fqdn_resources  = amnh.fqdn_resources,
         cc_star_usage = cc_star.hours,
         cc_star_count = cc_star.count,
         cc_star_fqdns = cc_star.fqdns,
-        cc_star_resources = cc_star.resources,
-        cc_star_fqdn_resources = cc_star.fqdn_resources,
         cc_star_gpu_usage = cc_star_gpu.hours,
         cc_star_gpu_count = cc_star_gpu.count,
         cc_star_gpu_fqdns = cc_star_gpu.fqdns,
-        cc_star_gpu_resources = cc_star_gpu.resources,
-        cc_star_gpu_fqdn_resources = cc_star_gpu.fqdn_resources,
     )
 
 
