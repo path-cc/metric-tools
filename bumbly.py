@@ -108,9 +108,6 @@ def cpu_hours_for_window_filters(days, extra_filters, want_fqdns=False):
 HoursCount = collections.namedtuple("HoursCount", ['hours', 'count', 'fqdns'])
 
 
-def testy():
-    return cpu_hours_for_window_filters2(1, cc_star_gpu_usage, want_fqdns=True)
-
 def get_panel_row(extra_filters, want_fqdns=False):
     windows = [1, 30, 365]
     def cpu_hours_for_window(d):
