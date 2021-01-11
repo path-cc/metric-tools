@@ -27,7 +27,9 @@ def getxml():
     return urlopen(_rgsummary_url).read()
 
 
-def get_osdf_facilities(xmltxt):
+def get_osdf_facilities(xmltxt=None):
+    if xmltxt is None:
+        xmltxt = getxml()
     xmltree = et.fromstring(xmltxt)
     return set(
         rg.find("Facility").find("Name").text
@@ -39,8 +41,7 @@ def get_osdf_facilities(xmltxt):
 
 
 def main():
-    xmltxt = getxml()
-    facilities = sorted(get_osdf_facilities(xmltxt))
+    facilities = sorted(get_osdf_facilities())
     n = len(facilities)
     print("%d OSDF Facilit%s:" % (n, "y" if n == 1 else "ies"))
     for f in sorted(facilities):
