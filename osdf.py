@@ -40,9 +40,11 @@ def get_osdf_facilities(xmltxt):
 
 def main():
     xmltxt = getxml()
-    facilities = get_osdf_facilities(xmltxt)
+    facilities = sorted(get_osdf_facilities(xmltxt))
+    n = len(facilities)
+    print("%d OSDF Facilit%s:" % (n, "y" if n == 1 else "ies"))
     for f in sorted(facilities):
-        print(f)
+        print(" - %s" % f)
 
 
 if __name__ == '__main__':
