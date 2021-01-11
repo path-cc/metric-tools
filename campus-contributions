@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import oscf
+import osdf
+
+
+def plural_s(n):
+    return "" if n == 1 else "s"
+
+def print_campus_list(facilities, desc):
+    facilities = sorted(facilities)
+    n = len(facilities)
+    s = plural_s(n)
+    print("%d Campus%s contributing resources to %s" % (n, s, desc))
+    for f in sorted(facilities):
+        print(" - %s" % f)
+    print()
+
+def main(first_day, last_day):
+    oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
+    osdf_facilities = osdf.get_osdf_facilities()
+
+    print_campus_list(oscf_facilities, "OSCF")
+    print_campus_list(osdf_facilities, "OSDF")
+    print_campus_list(oscf_facilities | osdf_facilities, "OSCF or OSDF")
+
+
+def usage():
+    print("usage: %s BEGIN_DATE END_DATE" % os.path.basename(__file__),
+          file=sys.stderr)
+
+
+if __name__ == '__main__':
+    try:
+        main(*sys.argv[1:])
+    except (TypeError, ValueError):
+        usage()
+        sys.exit(1)
+
