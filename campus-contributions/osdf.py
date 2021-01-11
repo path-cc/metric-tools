@@ -14,8 +14,17 @@ except ImportError:
 
 import xml.etree.ElementTree as et
 
+
 _topology_host = "topology.opensciencegrid.org"
 _rgsummary_url = 'https://{host}/rgsummary/xml'.format(host=_topology_host)
+_active_params = [
+    ('active',        'on'),
+    ('active_value',  '1' ),
+    ('disable',       'on'),
+    ('disable_value', '0' ),
+]
+_xml_url = "%s?%s" % (_rgsummary_url, '&'.join(map('='.join, _active_params)))
+
 
 _osdf_service_types = [
     "XRootD cache server",
@@ -24,7 +33,7 @@ _osdf_service_types = [
 
 
 def getxml():
-    return urlopen(_rgsummary_url).read()
+    return urlopen(_xml_url).read()
 
 
 def get_osdf_facilities(xmltxt=None):
