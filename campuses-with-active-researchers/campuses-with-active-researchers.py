@@ -78,7 +78,12 @@ def get_ccstar_facilities() -> Set[str]:
 def get_facilities_with_active_researchers(
     starttime: datetime.datetime, endtime: datetime.datetime
 ) -> Set[str]:
-    """Query GRACC to get a set of the names of the facilities that have active researchers in the given date range"""
+    """Query GRACC to get a set of the names of the facilities that have active researchers in the given date range.
+    Note: the field is OIM_Organization but matches one of the Topology Facilities.
+    OIM_Organization is the organization the payload's project belongs to;
+    the similar field OIM_Facility is where the jobs actually ran.
+
+    """
     es = Elasticsearch(
         [GRACC],
         timeout=300,
@@ -100,11 +105,11 @@ def get_facilities_with_active_researchers(
     )
 
     bkt = s.aggs
-    bkt = bkt.bucket("Facility", "terms", size=MAXSZ, field="OIM_Facility")
+    bkt = bkt.bucket("Organization", "terms", size=MAXSZ, field="OIM_Organization")
 
     response = s.execute()
 
-    return {f["key"] for f in response.aggregations["Facility"]["buckets"]}
+    return {f["key"] for f in response.aggregations["Organization"]["buckets"]}
 
 
 def main(argv):
