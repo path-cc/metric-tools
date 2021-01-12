@@ -18,10 +18,10 @@ import xml.etree.ElementTree as et
 _topology_host = "topology.opensciencegrid.org"
 _rgsummary_url = 'https://{host}/rgsummary/xml'.format(host=_topology_host)
 _active_params = [
-    ('active',        'on'),
-    ('active_value',  '1' ),
-    ('disable',       'on'),
-    ('disable_value', '0' ),
+    ('active',        'on'),  # filter resources by "Active" field
+    ('active_value',  '1' ),  # require Active: true
+    ('disable',       'on'),  # filter resources by "Disable" field
+    ('disable_value', '0' ),  # require Disable: false
 ]
 _xml_url = "%s?%s" % (_rgsummary_url, '&'.join(map('='.join, _active_params)))
 
