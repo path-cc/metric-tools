@@ -34,6 +34,10 @@ def get_topology_resourcegroups() -> List[ET.Element]:
     r = http.request(
         "GET",
         TOPOLOGY_RGSUMMARY,
+        # active=on turns on filtering by the 'active' field;
+        # active_value=1 means the output should only contain active resources.
+        # (Without active=on, topology ignores active_value.)
+        # disable and disable_value work the same way.
         fields={
             "active": "on",
             "active_value": "1",
