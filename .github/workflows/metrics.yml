@@ -1,0 +1,43 @@
+name: metrics
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: startsWith(github.repository, 'path-cc/')
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false  # use personal token, not GITHUB_TOKEN
+          fetch-depth: 0  # or else push will fail
+
+      - name: setup and run metrics
+        run: |
+          cd campuses-with-activate-researchers
+          python3 -m venv .
+          . ./bin/activate
+          pip install -r requirements.txt
+          ./campuses-with-active-researchers.py --csv > ../campuses-with-active-researchers.csv
+          cd ..
+          ./campus-contributions --json > ../campus-contributions.json
+
+    - name: Commit files
+      run: |
+        git checkout gh-pages
+        git config --local user.email "osg-bot@users.noreply.github.com"
+        git config --local user.name "OSG-BOT"
+        git add campuses-with-active-researchers.csv
+        git add campus-contributions.json
+        git commit -m "nightly metrics update"
+
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        #repository: path-cc/metrics
+        branch: gh-pages
+
