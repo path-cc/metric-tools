@@ -89,30 +89,33 @@ def main():
         "Zach Miller": 0,
         "Jason Patton": 0,
         "Todd Tannenbaum": 0,
-        "Greg Thain": 0
+        "Greg Thain": 0,
+        "Tim Theisen": 0
     }
 
     # Iterate over all open Improvement issues
-    issues = jira.search_issues("project = HTCONDOR AND type = Improvement AND status not in (Done, Abandoned)")
+    issues = jira.search_issues("project = HTCONDOR AND type = Improvement")
     for issue in issues:
         issue_worklog = jira.worklogs(issue)
-        #if len(issue_worklog) > 0: # Debug
-        #    print(f"Issue: {issue.fields.summary} ({issue.key})")
+        if len(issue_worklog) > 0: # Debug
+            print(f"Issue: {issue.fields.summary} ({issue.key})")
         for work_item in issue_worklog:
-            work_datetime = datetime.strptime(work_item.updated, "%Y-%m-%dT%H:%M:%S.%f-0600")
+            work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
+            #print(f"\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
             if work_datetime > start_datetime and work_datetime < end_datetime:
-                #print(f"\tWork logged: Author = {work_item.author.displayName}, Date logged = {work_item.updated}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+                print(f"\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
                 developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
 
         issue_subtasks = issue.fields.subtasks
         for subtask in issue_subtasks:
             subtask_worklog = jira.worklogs(subtask)
-            #if len(subtask_worklog) > 0: # Debug
-            #    print(f"\tSubtask: {subtask.fields.summary} ({subtask.key})")
+            if len(subtask_worklog) > 0: # Debug
+                print(f"\tSubtask: {subtask.fields.summary} ({subtask.key})")
             for work_item in subtask_worklog:
-                work_datetime = datetime.strptime(work_item.updated, "%Y-%m-%dT%H:%M:%S.%f-0600")
+                work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
+                #print(f"\t\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
                 if work_datetime > start_datetime and work_datetime < end_datetime:
-                    #print(f"\t\tWork logged: Author = {work_item.author.displayName}, Date logged = {work_item.updated}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+                    print(f"\t\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
                     developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
 
     # All done! Output results
@@ -124,7 +127,7 @@ def main():
 
     print(f"\nTotal hours logged to HTCONDOR Improvement issues: {total_hours_logged}")
     print(f"Total developer hours worked (assuming 40-hour work weeks): {len(developer_hours)*40}")
-    print(f"Percent effort logged to Improvement issues: {round(len(developer_hours)*40/total_hours_logged, 2)}%\n")
+    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/(len(developer_hours)*40), 2)}%\n")
 
 
 if __name__ == "__main__":
