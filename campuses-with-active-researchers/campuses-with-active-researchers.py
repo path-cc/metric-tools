@@ -75,13 +75,11 @@ def get_ccstar_facilities() -> Set[str]:
     )
 
 
-def get_facilities_with_active_researchers(
+def get_organizations_with_active_researchers(
     starttime: datetime.datetime, endtime: datetime.datetime
 ) -> Set[str]:
-    """Query GRACC to get a set of the names of the facilities that have active researchers in the given date range.
-    Note: the field is OIM_Organization but matches one of the Topology Facilities.
-    OIM_Organization is the organization the payload's project belongs to;
-    the similar field OIM_Facility is where the jobs actually ran.
+    """Query GRACC to get a set of the names of the organizations that have active researchers in the given date range.
+    The field OIM_Organization is taken from the Organizations in the projects YAML files.
 
     """
     es = Elasticsearch(
@@ -141,20 +139,23 @@ def main(argv):
     if starttime > endtime:
         parser.error("Start date can't be after end date")
 
-    active_facilities = get_facilities_with_active_researchers(starttime, endtime)
+    active_organizations = get_organizations_with_active_researchers(starttime, endtime)
     ccstar_facilities = get_ccstar_facilities()
 
+    # TODO: Project Organizations do not necessarily match Topology Facilities.
+    # This may result in errors in the CC* column (false negatives being more likely).
+    # Not sure where the place to fix it is -- or if the comparison is even meaningful.
     if args.csv:
         writer = csv.writer(sys.stdout, dialect="unix")
-        writer.writerow(("CC*", "Facility"))
-        for facility in sorted(active_facilities):
-            writer.writerow(("True" if facility in ccstar_facilities else "False", facility))
+        writer.writerow(("CC*", "Organization"))
+        for organization in sorted(active_organizations):
+            writer.writerow(("True" if organization in ccstar_facilities else "False", organization))
     else:
         fmt_string = "%-6s%s"
-        print(fmt_string % ("CC*", "Facility"))
+        print(fmt_string % ("CC*", "Organization"))
         print(fmt_string % ("----- ", "---------"))
-        for facility in sorted(active_facilities):
-            print(fmt_string % ("yes" if facility in ccstar_facilities else "", facility))
+        for organization in sorted(active_organizations):
+            print(fmt_string % ("yes" if organization in ccstar_facilities else "", organization))
 
 
 if __name__ == "__main__":
