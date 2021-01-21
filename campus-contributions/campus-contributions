@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import sys
+import json
 
 import oscf
 import osdf
@@ -12,14 +13,20 @@ import osdf
 def plural_s(n):
     return "" if n == 1 else "s"
 
+
 def print_campus_list(facilities, desc):
-    facilities = sorted(facilities)
     n = len(facilities)
     s = plural_s(n)
     print("%d Campus%s contributing resources to %s" % (n, s, desc))
     for f in sorted(facilities):
         print(" - %s" % f)
     print()
+
+
+def campus_list_info(facilities):
+    return { "facilities": sorted(facilities),
+             "num_facilities": len(facilities) }
+
 
 def main(first_day, last_day):
     oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
@@ -30,14 +37,28 @@ def main(first_day, last_day):
     print_campus_list(oscf_facilities | osdf_facilities, "OSCF or OSDF")
 
 
+def main_json(first_day, last_day):
+    oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
+    osdf_facilities = osdf.get_osdf_facilities()
+
+    print(json.dumps({
+        "oscf": campus_list_info(oscf_facilities),
+        "osdf": campus_list_info(osdf_facilities),
+        "oscf_or_osdf": campus_list_info(oscf_facilities | osdf_facilities)
+    }, sort_keys=True, indent=2))
+
+
 def usage():
-    print("usage: %s BEGIN_DATE END_DATE" % os.path.basename(__file__),
+    print("usage: %s [--json] BEGIN_DATE END_DATE" % os.path.basename(__file__),
           file=sys.stderr)
 
 
 if __name__ == '__main__':
     try:
-        main(*sys.argv[1:])
+        if sys.argv[1:2] == ["--json"]:
+            main_json(*sys.argv[2:])
+        else:
+            main(*sys.argv[1:])
     except (TypeError, ValueError):
         usage()
         sys.exit(1)
