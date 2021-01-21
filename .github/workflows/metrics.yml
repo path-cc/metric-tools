@@ -26,25 +26,26 @@ jobs:
           cd ..
           ./campus-contributions --json > ../campus-contributions.json
 
-    - name: Commit files
-      run: |
-        git clone --depth=1 git@github.com:path-cc/metrics
-        mv campus-contributions.json metrics
-        mv campuses-with-active-researchers.csv metrics
-        cd metrics
-        git config --local user.email "help@opensciencegrid.org"
-        git config --local user.name "Automatic preview publish"
-        git add campuses-with-active-researchers.csv
-        git add campus-contributions.json
-        git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
+      - name: Commit files
+        run: |
+          git clone --depth=1 git@github.com:path-cc/metrics
+          mv campus-contributions.json metrics
+          mv campuses-with-active-researchers.csv metrics
+          cd metrics
+          git config --local user.email "help@opensciencegrid.org"
+          git config --local user.name "Automatic preview publish"
+          git add campuses-with-active-researchers.csv
+          git add campus-contributions.json
+          git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
 
-    - name: Push changes
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan github.com >> ~/.ssh/known_hosts
-        ssh-agent -a "$SSH_AUTH_SOCK" > /dev/null
-        ssh-add - <<< "${{ secrets.METRICS_DEPLOY_KEY }}"
-        cd metrics
-        git push
-      env:
-        SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+      - name: Push changes
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh-agent -a "$SSH_AUTH_SOCK" > /dev/null
+          ssh-add - <<< "${{ secrets.METRICS_DEPLOY_KEY }}"
+          cd metrics
+          git push
+
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
