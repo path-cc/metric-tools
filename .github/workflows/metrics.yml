@@ -32,7 +32,7 @@ jobs:
         git config --local user.name "Automatic preview publish"
         git add campuses-with-active-researchers.csv
         git add campus-contributions.json
-        git commit -m "nightly metrics update"
+        git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
 
     - name: Push changes
       run: |
