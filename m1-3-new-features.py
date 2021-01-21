@@ -24,13 +24,14 @@ def parse_args():
     # The only syntax that is acceptable is:
     # <this> -startdate YYYY-MM-DD -enddate YYYY-MM-DD
 
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in [5, 6]:
         print_help()
         sys.exit(-1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-startdate", help="Start date")
     parser.add_argument("-enddate", help="End date")
+    parser.add_argument("-detailed", help="Show detailed results", action="store_true")
     args = parser.parse_args()
 
     start_datetime = args.startdate
@@ -57,6 +58,7 @@ def parse_args():
     return {
         "start_datetime": start_datetime,
         "end_datetime": end_datetime,
+        "detailed": args.detailed
     }
 
 
@@ -68,8 +70,9 @@ def main():
     except Exception as err:
         print(f"Failed to parse arguments: {err}", file=sys.stderr)
 
-    start_datetime = args['start_datetime']
-    end_datetime = args['end_datetime']
+    start_datetime = args["start_datetime"]
+    end_datetime = args["end_datetime"]
+    detailed = args["detailed"]
 
     # Connect to Jira
     options = {"server": "https://opensciencegrid.atlassian.net"}
@@ -93,41 +96,50 @@ def main():
         "Tim Theisen": 0
     }
 
-    # Iterate over all open Improvement issues
-    issues = jira.search_issues("project = HTCONDOR AND type = Improvement")
+    # Iterate over all Improvement issues
+    issues = jira.search_issues("project = HTCONDOR AND type = Improvement", maxResults=False)
     for issue in issues:
         issue_worklog = jira.worklogs(issue)
-        if len(issue_worklog) > 0: # Debug
-            print(f"Issue: {issue.fields.summary} ({issue.key})")
+        display_issue_header = True
         for work_item in issue_worklog:
             work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
-            #print(f"\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+            #print(f"\tWork logged: Author = {work_item.author.displayName}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started = {work_item.started}")  # Debug
             if work_datetime > start_datetime and work_datetime < end_datetime:
-                print(f"\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+                if display_issue_header is True and detailed is True:
+                    print(f"{issue.key}: {issue.fields.summary}")
+                    display_issue_header = False # Only display the issue header once
+                if detailed is True:
+                    started = work_item.started[0:work_item.started.rfind("-")]
+                    started_datetime = datetime.strptime(started, "%Y-%m-%dT%H:%M:%S.%f")
+                    print(f"\t{work_item.author.displayName} worklog, Time spent: {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started: {started_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
                 developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
 
         issue_subtasks = issue.fields.subtasks
         for subtask in issue_subtasks:
             subtask_worklog = jira.worklogs(subtask)
-            if len(subtask_worklog) > 0: # Debug
-                print(f"\tSubtask: {subtask.fields.summary} ({subtask.key})")
+            display_subtask_header = True
             for work_item in subtask_worklog:
                 work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
-                #print(f"\t\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+                #print(f"\t\tWork logged: Author = {work_item.author.displayName}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started = {work_item.started}")  # Debug
                 if work_datetime > start_datetime and work_datetime < end_datetime:
-                    print(f"\t\tWork logged: Author = {work_item.author.displayName}, Started = {work_item.started}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s)")  # Debug
+                    if display_subtask_header is True and detailed is True:
+                        print(f"\tSubtask {subtask.key}: {subtask.fields.summary}")
+                    if detailed is True:
+                        started = work_item.started[0:work_item.started.rfind("-")]
+                        started_datetime = datetime.strptime(started, "%Y-%m-%dT%H:%M:%S.%f")
+                        print(f"\t\t{work_item.author.displayName} worklog, Time spent: {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started: {started_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
                     developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
 
     # All done! Output results
     total_hours_logged = 0
     print(f"\nBetween {start_datetime.strftime('%Y-%m-%d')} and {end_datetime.strftime('%Y-%m-%d')}:\n")
     for developer in developer_hours:
-        print(f"{developer} logged {developer_hours[developer]} hours")
+        print(f"{developer} logged {round(developer_hours[developer], 2)} hours")
         total_hours_logged += developer_hours[developer]
 
     print(f"\nTotal hours logged to HTCONDOR Improvement issues: {total_hours_logged}")
     print(f"Total developer hours worked (assuming 40-hour work weeks): {len(developer_hours)*40}")
-    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/(len(developer_hours)*40), 2)}%\n")
+    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/(len(developer_hours)*40))}%\n")
 
 
 if __name__ == "__main__":

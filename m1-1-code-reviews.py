@@ -23,15 +23,16 @@ def print_help(stream=sys.stderr):
 def parse_args():
 
     # The only syntax that is acceptable is:
-    # <this> -startdate YYYY-MM-DD -enddate YYYY-MM-DD
+    # <this> -startdate YYYY-MM-DD -enddate YYYY-MM-DD [-detailed]
 
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in [5, 6]:
         print_help()
         sys.exit(-1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-startdate", help="Start date")
     parser.add_argument("-enddate", help="End date")
+    parser.add_argument("-detailed", help="Show detailed results", action="store_true")
     args = parser.parse_args()
 
     start_datetime = args.startdate
@@ -58,6 +59,7 @@ def parse_args():
     return {
         "start_datetime": start_datetime,
         "end_datetime": end_datetime,
+        "detailed": args.detailed
     }
 
 
@@ -69,8 +71,10 @@ def main():
     except Exception as err:
         print(f"Failed to parse arguments: {err}", file=sys.stderr)
 
-    start_datetime = args['start_datetime']
-    end_datetime = args['end_datetime']
+    start_datetime = args["start_datetime"]
+    end_datetime = args["end_datetime"]
+    detailed = args["detailed"]
+
     num_issues_done = 0
     num_done_issues_code_reviewed = 0
 
@@ -79,7 +83,7 @@ def main():
     jira = JIRA(options)
 
     # Iterate over all completed issues in the HTCONDOR project
-    issues = jira.search_issues("project = HTCONDOR AND status = Done", expand="changelog")
+    issues = jira.search_issues("project = HTCONDOR AND status = Done", expand="changelog", maxResults=False)
     for issue in issues:
         issue_changelog = issue.changelog.histories
         issue_isdone = False
@@ -89,10 +93,13 @@ def main():
                 if issue_isdone:
                     break
                 if item.field == "status" and item.toString == "Done":
+                    # Strip the time offset from the change.created string
+                    changed = change.created[0:change.created.rfind("-")]
                     # Was this issue set to Done status between the provided end and start dates?
-                    change_datetime = datetime.strptime(change.created, "%Y-%m-%dT%H:%M:%S.%f-0600")
-                    if change_datetime > start_datetime and change_datetime < end_datetime:
-                        #print(f"Issue: {issue.fields.summary}, Marked Done: {change_datetime}") # Debug
+                    changed_datetime = datetime.strptime(changed, "%Y-%m-%dT%H:%M:%S.%f")
+                    if changed_datetime > start_datetime and changed_datetime < end_datetime:
+                        if detailed is True:
+                            print(f"{issue.key}: {issue.fields.summary}, Marked Done: {changed_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
                         num_issues_done += 1
                         issue_isdone = True
                         # Now check the issue comments for a "CODE REVIEW" text entry
@@ -101,12 +108,14 @@ def main():
                             for comment in comments:
                                 if "code review" in comment.body.lower():
                                     num_done_issues_code_reviewed += 1
-                                    #print("\tThis issue was code reviewed") # Debug
+                                    if detailed is True:
+                                        print("\tThis issue was code reviewed")
+                                    break
 
     print(f"\nBetween {start_datetime.strftime('%Y-%m-%d')} and {end_datetime.strftime('%Y-%m-%d')}:\n")
     print(f"{num_issues_done} HTCONDOR issues were marked Done")
     print(f"{num_done_issues_code_reviewed} of these completed issues were code reviewed")
-    print(f"Code review rate: {round(num_done_issues_code_reviewed*100/num_issues_done, 2)}%\n")
+    print(f"Code review rate: {round(num_done_issues_code_reviewed*100/num_issues_done)}%\n")
 
 
 if __name__ == "__main__":

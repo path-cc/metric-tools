@@ -24,12 +24,13 @@ def parse_args():
     # The only syntax that is acceptable is:
     # <this> -date YYYY-MM-DD
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in [3, 4]:
         print_help()
         sys.exit(-1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-date", help="Date to compare against for stale issues")
+    parser.add_argument("-detailed", help="Show detailed results", action="store_true")
     args = parser.parse_args()
 
     target_datetime = args.date
@@ -45,7 +46,8 @@ def parse_args():
         sys.exit(-1)
 
     return {
-        "target_datetime": target_datetime
+        "target_datetime": target_datetime,
+        "detailed": args.detailed
     }
 
 
@@ -57,7 +59,8 @@ def main():
     except Exception as err:
         print(f"Failed to parse arguments: {err}", file=sys.stderr)
 
-    target_datetime = args['target_datetime']
+    target_datetime = args["target_datetime"]
+    detailed = args["detailed"]
 
     # Connect to Jira
     options = {"server": "https://opensciencegrid.atlassian.net"}
@@ -68,13 +71,17 @@ def main():
     stale_issues = []
 
     # Iterate over all open issues
-    issues = jira.search_issues("project = HTCONDOR AND type in (Improvement, Bug, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned)")
+    issues = jira.search_issues("project = HTCONDOR AND type in (Improvement, Bug, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned)", maxResults=False)
     for issue in issues:
-        #print(f"Issue: {issue.fields.summary} Updated: {issue.fields.updated}") # Debug
+        updated = issue.fields.updated[0:issue.fields.updated.rfind("-")]
+        updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")
+        if detailed is True:
+            print(f"{issue.key}: {issue.fields.summary}, Updated: {datetime.strftime(updated_datetime, '%Y-%m-%d %H:%M:%S')}")
         num_open_issues += 1
-        updated_datetime = datetime.strptime(issue.fields.updated, "%Y-%m-%dT%H:%M:%S.%f-0600")
+        
         if updated_datetime < stale_datetime:
-            #print("\tThis issue is stale!") # Debug
+            if detailed is True:
+                print("\tThis issue is stale!")
             stale_issues.append(issue.key)
 
     # All done! Output results
@@ -82,7 +89,7 @@ def main():
 
     print(f"{num_open_issues} issues are open")
     print(f"{len(stale_issues)} open issues have not been updated in the last 10 days")
-    print(f"Percent open issues that are stale: {round(len(stale_issues)*100/num_open_issues, 2)}%\n")
+    print(f"Percent open issues that are stale: {round(len(stale_issues)*100/num_open_issues)}%\n")
 
 
 if __name__ == "__main__":
