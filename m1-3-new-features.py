@@ -124,6 +124,7 @@ def main():
                 if work_datetime > start_datetime and work_datetime < end_datetime:
                     if display_subtask_header is True and detailed is True:
                         print(f"\tSubtask {subtask.key}: {subtask.fields.summary}")
+                        display_subtask_header = False
                     if detailed is True:
                         started = work_item.started[0:work_item.started.rfind("-")]
                         started_datetime = datetime.strptime(started, "%Y-%m-%dT%H:%M:%S.%f")
