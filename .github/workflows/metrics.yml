@@ -11,9 +11,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          persist-credentials: false  # use personal token, not GITHUB_TOKEN
-          fetch-depth: 0  # or else push will fail
 
       - name: setup and run metrics
         run: |
@@ -27,16 +24,23 @@ jobs:
 
     - name: Commit files
       run: |
-        git checkout gh-pages
-        git config --local user.email "osg-bot@users.noreply.github.com"
-        git config --local user.name "OSG-BOT"
+        git clone --depth=1 git@github.com:path-cc/metrics
+        mv campus-contributions.json metrics
+        mv campuses-with-active-researchers.csv metrics
+        cd metrics
+        git config --local user.email "help@opensciencegrid.org"
+        git config --local user.name "Automatic preview publish"
         git add campuses-with-active-researchers.csv
         git add campus-contributions.json
         git commit -m "nightly metrics update"
 
     - name: Push changes
-      uses: ad-m/github-push-action@v0.6.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        #repository: path-cc/metrics
-        branch: gh-pages
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        ssh-agent -a "$SSH_AUTH_SOCK" > /dev/null
+        ssh-add - <<< "${{ secrets.PREVIEW_DEPLOY_KEY }}"
+        cd metrics
+        git push
+      env:
+        SSH_AUTH_SOCK: /tmp/ssh_agent.sock
