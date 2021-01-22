@@ -3,7 +3,7 @@ name: metrics
 on:
   push:
     branches:
-      - master
+      - main
 
   schedule:
     - cron: '0 0 * * *'
@@ -18,12 +18,12 @@ jobs:
 
       - name: setup and run metrics
         run: |
-          cd campuses-with-activate-researchers
+          cd campuses-with-active-researchers
           python3 -m venv .
           . ./bin/activate
           pip install -r requirements.txt
           ./campuses-with-active-researchers.py --csv > ../campuses-with-active-researchers.csv
-          cd ..
+          cd ../campus-contributions
           ./campus-contributions --json > ../campus-contributions.json
 
       - name: Commit files
