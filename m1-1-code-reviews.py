@@ -115,7 +115,7 @@ def main():
     print(f"\nBetween {start_datetime.strftime('%Y-%m-%d')} and {end_datetime.strftime('%Y-%m-%d')}:\n")
     print(f"{num_issues_done} HTCONDOR issues were marked Done")
     print(f"{num_done_issues_code_reviewed} of these completed issues were code reviewed")
-    print(f"Code review rate: {round(num_done_issues_code_reviewed*100/num_issues_done)}%\n")
+    print(f"Code review rate: {round(num_done_issues_code_reviewed*100/num_issues_done, 2)}%\n")
 
 
 if __name__ == "__main__":

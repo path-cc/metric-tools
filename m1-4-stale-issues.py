@@ -89,7 +89,7 @@ def main():
 
     print(f"{num_open_issues} issues are open")
     print(f"{len(stale_issues)} open issues have not been updated in the last 10 days")
-    print(f"Percent open issues that are stale: {round(len(stale_issues)*100/num_open_issues)}%\n")
+    print(f"Percent open issues that are stale: {round(len(stale_issues)*100/num_open_issues, 2)}%\n")
 
 
 if __name__ == "__main__":

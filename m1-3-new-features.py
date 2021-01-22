@@ -24,41 +24,50 @@ def parse_args():
     # The only syntax that is acceptable is:
     # <this> -startdate YYYY-MM-DD -enddate YYYY-MM-DD
 
-    if len(sys.argv) not in [5, 6]:
+    if len(sys.argv) not in [5, 6, 7, 8]:
         print_help()
-        sys.exit(-1)
+        sys.exit(1)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-startdate", help="Start date")
     parser.add_argument("-enddate", help="End date")
     parser.add_argument("-detailed", help="Show detailed results", action="store_true")
+    parser.add_argument("-hoursoff", help="Hours off by developers during this time period (vacation, sick days, etc.")
     args = parser.parse_args()
 
     start_datetime = args.startdate
     end_datetime = args.enddate
+    hours_off = 0
 
     # Validate input
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', start_datetime):
         print("Error: -startdate argument must take YYYY-MM-DD format")
-        sys.exit(-1)
+        sys.exit(1)
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', end_datetime):
         print("Error: -enddate argument must take YYYY-MM-DD format")
-        sys.exit(-1)
+        sys.exit(1)
     try:
         start_datetime = datetime.strptime(start_datetime + " 00:00:01", "%Y-%m-%d %H:%M:%S")
     except:
         print(f"Error: Start date {start_datetime} is not a valid date")
-        sys.exit(-1)
+        sys.exit(1)
     try:
         end_datetime = datetime.strptime(end_datetime + " 23:59:59", "%Y-%m-%d %H:%M:%S")
     except:
         print(f"Error: End date {end_datetime} is not a valid date")
-        sys.exit(-1)
+        sys.exit(1)
+    if args.hoursoff is not None:
+        try:
+            hours_off = int(args.hoursoff)
+        except:
+            print(f"Error: -hoursoff must supply an integer number of developer hours off")
+            sys.exit(1)
 
     return {
         "start_datetime": start_datetime,
         "end_datetime": end_datetime,
-        "detailed": args.detailed
+        "detailed": args.detailed,
+        "hours_off": hours_off
     }
 
 
@@ -73,6 +82,7 @@ def main():
     start_datetime = args["start_datetime"]
     end_datetime = args["end_datetime"]
     detailed = args["detailed"]
+    hours_off = args["hours_off"]
 
     # Connect to Jira
     options = {"server": "https://opensciencegrid.atlassian.net"}
@@ -138,9 +148,10 @@ def main():
         print(f"{developer} logged {round(developer_hours[developer], 2)} hours")
         total_hours_logged += developer_hours[developer]
 
+    total_developer_hours_worked = len(developer_hours)*40 - hours_off
     print(f"\nTotal hours logged to HTCONDOR Improvement issues: {total_hours_logged}")
-    print(f"Total developer hours worked (assuming 40-hour work weeks): {len(developer_hours)*40}")
-    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/(len(developer_hours)*40))}%\n")
+    print(f"Total developer hours worked (assuming 40-hour work weeks, minus time off): {total_developer_hours_worked}")
+    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/total_developer_hours_worked, 2)}%\n")
 
 
 if __name__ == "__main__":
