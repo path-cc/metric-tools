@@ -35,7 +35,7 @@ jobs:
 
       - name: Commit files
         run: |
-          git clone --depth=1 git@github.com:path-cc/metrics
+          git clone --depth=1 https://github.com/path-cc/metrics
           mv campus-contributions.json metrics
           mv campuses-with-active-researchers.csv metrics
           cd metrics
@@ -52,6 +52,7 @@ jobs:
           ssh-agent -a "$SSH_AUTH_SOCK" > /dev/null
           ssh-add - <<< "${{ secrets.METRICS_DEPLOY_KEY }}"
           cd metrics
+          git config remote.origin.pushurl git@github.com:path-cc/metrics
           git push
 
         env:
