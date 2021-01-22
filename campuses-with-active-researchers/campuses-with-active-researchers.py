@@ -87,7 +87,6 @@ def get_organizations_with_active_researchers(
         timeout=300,
         use_ssl=True,
         verify_certs=True,
-        ca_certs="/etc/ssl/certs/ca-bundle.crt",
     )
 
     MAXSZ = 2 ** 30
