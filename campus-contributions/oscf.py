@@ -11,8 +11,7 @@ from   elasticsearch_dsl import Search, A, Q
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
 es = elasticsearch.Elasticsearch(
-                [gracc_url], timeout=300, use_ssl=True, verify_certs=True,
-                ca_certs='/etc/ssl/certs/ca-bundle.crt')
+                [gracc_url], timeout=300, use_ssl=True, verify_certs=True)
 
 jobs_raw_index = 'gracc.osg.raw-*'
 jobs_summary_index = 'gracc.osg.summary'
