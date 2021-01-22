@@ -22,9 +22,16 @@ jobs:
           python3 -m venv .
           . ./bin/activate
           pip install -r requirements.txt
-          ./campuses-with-active-researchers.py --csv > ../campuses-with-active-researchers.csv
+
+          START_DATE=$(date -d "7 days ago" +%F)
+          END_DATE=$(date -d yesterday +%F)
+
+          { ./campuses-with-active-researchers.py --csv $START_DATE $END_DATE
+          } > ../campuses-with-active-researchers.csv
+
           cd ../campus-contributions
-          ./campus-contributions --json > ../campus-contributions.json
+          { ./campus-contributions --json $START_DATE $END_DATE
+          } > ../campus-contributions.json
 
       - name: Commit files
         run: |
