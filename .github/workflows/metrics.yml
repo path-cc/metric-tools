@@ -29,6 +29,9 @@ jobs:
           { ./campus-contributions --json $START_DATE $END_DATE
           } > ../campus-contributions.json
 
+          cd ../osg-cpu-hours
+          ./bumbly.py -o ../osg-cpu-hours.json
+
       - name: Commit files
         run: |
           git clone --depth=1 https://github.com/path-cc/metrics
@@ -39,6 +42,7 @@ jobs:
           git config --local user.name "Automatic preview publish"
           git add campuses-with-active-researchers.csv
           git add campus-contributions.json
+          git add osg-cpu-hours.json
           git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
 
       - name: Push changes
