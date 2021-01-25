@@ -149,7 +149,7 @@ def main(argv):
         nowts = runtime.strftime("%F at %H:%M")
         dateinfo = "(Generated on {} for {} through {})".format(nowts, args.startdate, args.enddate)
         writer = csv.writer(sys.stdout, dialect="unix")
-        writer.writerow(("CC*", "Organization"))
+        writer.writerow(("CC*", "Organization", dateinfo))
         for organization in sorted(active_organizations):
             writer.writerow(("True" if organization in ccstar_facilities else "False", organization))
     else:
