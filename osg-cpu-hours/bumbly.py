@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import re
 import sys
 import json
@@ -157,7 +159,7 @@ def main(args):
     else:
         out = sys.stdout
 
-    print >>out, prettyd(data)
+    print(prettyd(data), file=out)
 
 
 if __name__ == '__main__':
