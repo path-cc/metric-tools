@@ -112,7 +112,8 @@ def main():
         issue_worklog = jira.worklogs(issue)
         display_issue_header = True
         for work_item in issue_worklog:
-            work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
+            work_datetime = work_item.started[0:work_item.started.rfind("-")]
+            work_datetime = datetime.strptime(work_datetime, "%Y-%m-%dT%H:%M:%S.%f")
             #print(f"\tWork logged: Author = {work_item.author.displayName}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started = {work_item.started}")  # Debug
             if work_datetime > start_datetime and work_datetime < end_datetime:
                 if display_issue_header is True and detailed is True:
@@ -122,14 +123,18 @@ def main():
                     started = work_item.started[0:work_item.started.rfind("-")]
                     started_datetime = datetime.strptime(started, "%Y-%m-%dT%H:%M:%S.%f")
                     print(f"\t{work_item.author.displayName} worklog, Time spent: {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started: {started_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
-                developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
+                try:
+                    developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
+                except:
+                    print(f"\t\tError: could not add work logged for f{work_item.author.displayName}")
 
         issue_subtasks = issue.fields.subtasks
         for subtask in issue_subtasks:
             subtask_worklog = jira.worklogs(subtask)
             display_subtask_header = True
             for work_item in subtask_worklog:
-                work_datetime = datetime.strptime(work_item.started, "%Y-%m-%dT%H:%M:%S.%f-0600")
+                work_datetime = work_item.started[0:work_item.started.rfind("-")]
+                work_datetime = datetime.strptime(work_datetime, "%Y-%m-%dT%H:%M:%S.%f")
                 #print(f"\t\tWork logged: Author = {work_item.author.displayName}, Time spent = {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started = {work_item.started}")  # Debug
                 if work_datetime > start_datetime and work_datetime < end_datetime:
                     if display_subtask_header is True and detailed is True:
@@ -139,7 +144,10 @@ def main():
                         started = work_item.started[0:work_item.started.rfind("-")]
                         started_datetime = datetime.strptime(started, "%Y-%m-%dT%H:%M:%S.%f")
                         print(f"\t\t{work_item.author.displayName} worklog, Time spent: {round(work_item.timeSpentSeconds/3600, 2)} hr(s), Started: {started_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
-                    developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
+                    try:
+                        developer_hours[work_item.author.displayName] += round(work_item.timeSpentSeconds/3600, 2)
+                    except:
+                        print(f"\t\tError: could not add work logged for f{work_item.author.displayName}")
 
     # All done! Output results
     total_hours_logged = 0
@@ -148,9 +156,9 @@ def main():
         print(f"{developer} logged {round(developer_hours[developer], 2)} hours")
         total_hours_logged += developer_hours[developer]
 
-    total_developer_hours_worked = len(developer_hours)*40 - hours_off
+    total_developer_hours_worked = len(developer_hours)*(((end_datetime - start_datetime).days + 1) * 8) - hours_off
     print(f"\nTotal hours logged to HTCONDOR Improvement issues: {total_hours_logged}")
-    print(f"Total developer hours worked (assuming 40-hour work weeks, minus time off): {total_developer_hours_worked}")
+    print(f"Total developer hours worked (assuming 8-hour work days, minus time off): {total_developer_hours_worked}")
     print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/total_developer_hours_worked, 2)}%\n")
 
 

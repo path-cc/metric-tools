@@ -71,7 +71,7 @@ def main():
     stale_issues = []
 
     # Iterate over all open issues
-    issues = jira.search_issues("project = HTCONDOR AND type in (Improvement, Bug, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned)", maxResults=False)
+    issues = jira.search_issues(f"project = HTCONDOR AND type in (Improvement, Bug, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned) AND createdDate <= {target_datetime.strftime('%Y-%m-%d')}", maxResults=False)
     for issue in issues:
         updated = issue.fields.updated[0:issue.fields.updated.rfind("-")]
         updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")
