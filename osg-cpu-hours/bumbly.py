@@ -134,15 +134,6 @@ def m2():
     )
 
 
-def list_collapse(m):
-    return json.dumps(json.loads(m.group()))
-
-def prettyd(d):
-    dat = json.dumps(d, indent=1, sort_keys=True)
-    #return re.sub(r'(?<=: )\[[^]{}[]*\]', list_collapse, dat)
-    return re.sub(r'\[[^]{}[]{0,80}\]', list_collapse, dat)
-
-
 def main(args):
     unix_ts = int(time.time())
     human_ts = time.strftime("%F %H:%M", time.localtime(unix_ts))
@@ -157,7 +148,7 @@ def main(args):
     else:
         out = sys.stdout
 
-    print(prettyd(data), file=out)
+    print(json.dumps(data, indent=1, sort_keys=True), file=out)
 
 
 if __name__ == '__main__':
