@@ -30,7 +30,7 @@ jobs:
           } > ../campus-contributions.json
 
           cd ../osg-cpu-hours
-          ./bumbly.py -o ../osg-cpu-hours.json
+          ./osg-cpu-hours.py -o ../osg-cpu-hours.json
 
       - name: Commit files
         run: |
