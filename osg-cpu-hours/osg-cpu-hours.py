@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# osg-cpu-hours (the artist formerly known as "bumbly")
+
+# generates various Core Hours metrics including those in the dashboard panels
+# at the bottom of https://gracc.opensciencegrid.org/
+
 import re
 import sys
 import json
