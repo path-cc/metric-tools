@@ -38,10 +38,15 @@ def main(first_day, last_day):
 
 
 def main_json(first_day, last_day):
+    runts = datetime.datetime.now().strftime("%F %H:%M")
+
     oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
     osdf_facilities = osdf.get_osdf_facilities()
 
     print(json.dumps({
+        "begin_date": first_day,
+        "end_date": last_day,
+        "generated_at": runts,
         "oscf": campus_list_info(oscf_facilities),
         "osdf": campus_list_info(osdf_facilities),
         "oscf_or_osdf": campus_list_info(oscf_facilities | osdf_facilities)
