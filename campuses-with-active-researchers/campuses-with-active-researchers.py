@@ -138,6 +138,7 @@ def main(argv):
     if starttime > endtime:
         parser.error("Start date can't be after end date")
 
+    runtime = datetime.datetime.now()
     active_organizations = get_organizations_with_active_researchers(starttime, endtime)
     ccstar_facilities = get_ccstar_facilities()
 
@@ -145,8 +146,10 @@ def main(argv):
     # This may result in errors in the CC* column (false negatives being more likely).
     # Not sure where the place to fix it is -- or if the comparison is even meaningful.
     if args.csv:
+        nowts = runtime.strftime("%F at %H:%M")
+        dateinfo = "(Generated on {} for {} through {})".format(nowts, args.startdate, args.enddate)
         writer = csv.writer(sys.stdout, dialect="unix")
-        writer.writerow(("CC*", "Organization"))
+        writer.writerow(("CC*", "Organization", dateinfo))
         for organization in sorted(active_organizations):
             writer.writerow(("True" if organization in ccstar_facilities else "False", organization))
     else:

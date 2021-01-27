@@ -43,6 +43,9 @@ jobs:
           git add campuses-with-active-researchers.csv
           git add campus-contributions.json
           git add osg-cpu-hours.json
+          NOW=$(date +"%F at %H:%M")
+          sed -i "/Last generated:/s/:.*/: $NOW/" README.md
+          git add README.md
           git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
 
       - name: Push changes
