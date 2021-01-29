@@ -1,6 +1,11 @@
 #!/bin/bash
 set -ex
 
+# the following env vars should be set from the github workflow:
+
+# GITHUB_REPOSITORY GITHUB_WORKFLOW GITHUB_RUN_ID GITHUB_RUN_NUMBER TZ
+
+
 cd "$(dirname "$0")"
 
 
@@ -32,17 +37,28 @@ cd ..
 
 # Commit files
 
+OUTFILES=(
+  campus-contributions.json
+  campuses-with-active-researchers.csv
+  osg-cpu-hours.json
+)
 git clone --depth=1 https://github.com/path-cc/metrics
-mv campus-contributions.json metrics
-mv campuses-with-active-researchers.csv metrics
-mv osg-cpu-hours.json metrics
+mv ${OUTFILES[@]} metrics
 cd metrics
 git config --local user.email "help@opensciencegrid.org"
-git config --local user.name "Automatic preview publish"
-git add campuses-with-active-researchers.csv
-git add campus-contributions.json
-git add osg-cpu-hours.json
-NOW=$(date +"%F at %H:%M")
+git config --local user.name "Automatic metrics publish"
+mkdir -p historical
+
+NOWS=$(date +%s)
+NOW=$(date -d @$NOWS +"%F at %H:%M")
+NOW2=$(date -d @$NOWS +"%F_%H%M")
+
+for f in ${OUTFILES[@]}; do
+  git add $f
+  cp $f historical/$NOW2.$f
+  git add historical/$NOW2.$f
+done
+
 sed -i "/Last generated:/s/:.*/: $NOW/" README.md
 git add README.md
 git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
