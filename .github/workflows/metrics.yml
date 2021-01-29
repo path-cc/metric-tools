@@ -36,6 +36,9 @@ jobs:
           cd ../osg-cpu-hours
           ./osg-cpu-hours.py -o ../osg-cpu-hours.json
 
+        env:
+          TZ: America/Chicago
+
       - name: Commit files
         run: |
           git clone --depth=1 https://github.com/path-cc/metrics
@@ -52,6 +55,9 @@ jobs:
           sed -i "/Last generated:/s/:.*/: $NOW/" README.md
           git add README.md
           git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
+
+        env:
+          TZ: America/Chicago
 
       - name: Push changes
         run: |
