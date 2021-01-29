@@ -71,5 +71,4 @@ jobs:
 
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-          TZ: America/Chicago
 
