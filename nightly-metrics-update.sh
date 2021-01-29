@@ -50,7 +50,7 @@ git config --local user.name "Automatic metrics publish"
 mkdir -p historical
 
 NOWS=$(date +%s)
-NOW=$(date -d @$NOWS +"%F at %H:%M")
+NOW=$(date -d @$NOWS +"%F at %H:%M %Z")
 NOW2=$(date -d @$NOWS +"%F_%H%M")
 
 for f in ${OUTFILES[@]}; do
