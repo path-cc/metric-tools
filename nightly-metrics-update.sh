@@ -18,7 +18,7 @@ pip install -r campuses-with-active-researchers/requirements.txt
 
 # run metrics
 
-START_DATE=$(date -d "7 days ago" +%F)
+START_DATE=$(date -d "30 days ago" +%F)
 END_DATE=$(date -d yesterday +%F)
 
 cd campuses-with-active-researchers
