@@ -41,6 +41,7 @@ jobs:
           git clone --depth=1 https://github.com/path-cc/metrics
           mv campus-contributions.json metrics
           mv campuses-with-active-researchers.csv metrics
+          mv osg-cpu-hours.json metrics
           cd metrics
           git config --local user.email "help@opensciencegrid.org"
           git config --local user.name "Automatic preview publish"
