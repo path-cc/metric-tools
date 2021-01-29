@@ -19,8 +19,7 @@ import cc_star_fqdns
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
 es = elasticsearch.Elasticsearch(
-                [gracc_url], timeout=300, use_ssl=True, verify_certs=True,
-                ca_certs='/etc/ssl/certs/ca-bundle.crt')
+                [gracc_url], timeout=300, use_ssl=True, verify_certs=True)
 
 jobs_raw_index = 'gracc.osg.raw-*'
 jobs_summary_index = 'gracc.osg.summary'
@@ -112,7 +111,7 @@ def get_panel_row(extra_filters, want_fqdns=False):
         return cpu_hours_for_window_filters(d, extra_filters, want_fqdns)
 
     hours, count, fqdns = zip(*map(cpu_hours_for_window, windows))
-    return HoursCount(map("{:,}".format, hours), count, fqdns)
+    return HoursCount(list(map("{:,}".format, hours)), count, fqdns)
 
 def m2():
     amnh        = get_panel_row(amnh_usage, want_fqdns=True)
