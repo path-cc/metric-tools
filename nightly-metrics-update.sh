@@ -61,5 +61,9 @@ done
 
 sed -i "/Last generated:/s/:.*/: $NOW/" README.md
 git add README.md
+
+../mk-historical-md.sh > historical-results.md
+git add historical-results.md
+
 git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
 
