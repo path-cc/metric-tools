@@ -1,0 +1,49 @@
+#!/bin/bash
+set -ex
+
+cd "$(dirname "$0")"
+
+
+# venv setup
+
+python3 -m venv venv
+. venv/bin/activate
+pip install -r campuses-with-active-researchers/requirements.txt
+
+
+# run metrics
+
+START_DATE=$(date -d "7 days ago" +%F)
+END_DATE=$(date -d yesterday +%F)
+
+cd campuses-with-active-researchers
+{ ./campuses-with-active-researchers.py --csv $START_DATE $END_DATE
+} > ../campuses-with-active-researchers.csv
+
+cd ../campus-contributions
+{ ./campus-contributions --json $START_DATE $END_DATE
+} > ../campus-contributions.json
+
+cd ../osg-cpu-hours
+./osg-cpu-hours.py -o ../osg-cpu-hours.json
+
+cd ..
+
+
+# Commit files
+
+git clone --depth=1 https://github.com/path-cc/metrics
+mv campus-contributions.json metrics
+mv campuses-with-active-researchers.csv metrics
+mv osg-cpu-hours.json metrics
+cd metrics
+git config --local user.email "help@opensciencegrid.org"
+git config --local user.name "Automatic preview publish"
+git add campuses-with-active-researchers.csv
+git add campus-contributions.json
+git add osg-cpu-hours.json
+NOW=$(date +"%F at %H:%M")
+sed -i "/Last generated:/s/:.*/: $NOW/" README.md
+git add README.md
+git commit -m "nightly metrics update (from ${GITHUB_REPOSITORY} ${GITHUB_WORKFLOW} ${GITHUB_RUN_ID}.${GITHUB_RUN_NUMBER})"
+
