@@ -5,6 +5,6 @@ echo "Historical Metric Results"
 echo "========================="
 for f in $(ls -r historical); do
   echo
-  echo "[\`$f\`]($f)"
+  echo "[\`$f\`](historical/$f)"
 done
 
