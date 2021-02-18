@@ -1,0 +1,36 @@
+name: metrics
+
+on:
+  push:
+    branches:
+      - main
+
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: startsWith(github.repository, 'path-cc/')
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: setup and run metrics
+        run: ./nightly-metrics-update.sh
+        env:
+          TZ: America/Chicago
+
+      - name: Push changes
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh-agent -a "$SSH_AUTH_SOCK" > /dev/null
+          ssh-add - <<< "${{ secrets.METRICS_DEPLOY_KEY }}"
+          cd metrics
+          git config remote.origin.pushurl git@github.com:path-cc/metrics
+          git push
+
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+

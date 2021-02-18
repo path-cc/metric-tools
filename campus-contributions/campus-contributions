@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+
+import os
+import sys
+import json
+import datetime
+
+import oscf
+import osdf
+
+
+def plural_s(n):
+    return "" if n == 1 else "s"
+
+
+def print_campus_list(facilities, desc):
+    n = len(facilities)
+    s = plural_s(n)
+    print("%d Campus%s contributing resources to %s" % (n, s, desc))
+    for f in sorted(facilities):
+        print(" - %s" % f)
+    print()
+
+
+def campus_list_info(facilities):
+    return { "facilities": sorted(facilities),
+             "num_facilities": len(facilities) }
+
+
+def main(first_day, last_day):
+    oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
+    osdf_facilities = osdf.get_osdf_facilities()
+
+    print_campus_list(oscf_facilities, "OSCF")
+    print_campus_list(osdf_facilities, "OSDF")
+    print_campus_list(oscf_facilities | osdf_facilities, "OSCF or OSDF")
+
+
+def main_json(first_day, last_day):
+    runts = datetime.datetime.now().strftime("%F %H:%M")
+
+    oscf_facilities = oscf.get_oscf_facilities(first_day, last_day)
+    osdf_facilities = osdf.get_osdf_facilities()
+
+    print(json.dumps({
+        "begin_date": first_day,
+        "end_date": last_day,
+        "generated_at": runts,
+        "oscf": campus_list_info(oscf_facilities),
+        "osdf": campus_list_info(osdf_facilities),
+        "oscf_or_osdf": campus_list_info(oscf_facilities | osdf_facilities)
+    }, sort_keys=True, indent=2))
+
+
+def usage():
+    print("usage: %s [--json] BEGIN_DATE END_DATE" % os.path.basename(__file__),
+          file=sys.stderr)
+
+
+if __name__ == '__main__':
+    try:
+        if sys.argv[1:2] == ["--json"]:
+            main_json(*sys.argv[2:])
+        else:
+            main(*sys.argv[1:])
+    except (TypeError, ValueError):
+        usage()
+        sys.exit(1)
+
