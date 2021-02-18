@@ -14,7 +14,7 @@ def dump(obj):
 
 
 def print_help(stream=sys.stderr):
-    help_msg = """Usage: {0} -date YYYY-MM-DD
+    help_msg = """Usage: {0} --date YYYY-MM-DD [--detailed]
 """
     stream.write(help_msg.format(sys.argv[0]))
 
@@ -22,15 +22,15 @@ def print_help(stream=sys.stderr):
 def parse_args():
 
     # The only syntax that is acceptable is:
-    # <this> -date YYYY-MM-DD
+    # <this> --date YYYY-MM-DD [--detailed]
 
     if len(sys.argv) not in [3, 4]:
         print_help()
         sys.exit(-1)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-date", help="Date to compare against for stale issues")
-    parser.add_argument("-detailed", help="Show detailed results", action="store_true")
+    parser.add_argument("--date", help="Date to compare against for stale issues")
+    parser.add_argument("--detailed", help="Show detailed results", action="store_true")
     args = parser.parse_args()
 
     target_datetime = args.date
@@ -71,7 +71,7 @@ def main():
     stale_issues = []
 
     # Iterate over all open issues
-    issues = jira.search_issues(f"project = HTCONDOR AND type in (Improvement, Bug, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned) AND createdDate <= {target_datetime.strftime('%Y-%m-%d')}", maxResults=False)
+    issues = jira.search_issues(f"project = HTCONDOR AND type in (Improvement, Bug, Documentation, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned) AND createdDate <= {target_datetime.strftime('%Y-%m-%d')}", maxResults=False)
     for issue in issues:
         updated = issue.fields.updated[0:issue.fields.updated.rfind("-")]
         updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")

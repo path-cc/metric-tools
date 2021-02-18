@@ -14,7 +14,7 @@ def dump(obj):
 
 
 def print_help(stream=sys.stderr):
-    help_msg = """Usage: {0} -startdate YYYY-MM-DD -enddate YYYY-MM-DD
+    help_msg = """Usage: {0} --startdate YYYY-MM-DD --enddate YYYY-MM-DD --efforthours <hours> [--detailed]
 """
     stream.write(help_msg.format(sys.argv[0]))
 
@@ -22,22 +22,23 @@ def print_help(stream=sys.stderr):
 def parse_args():
 
     # The only syntax that is acceptable is:
-    # <this> -startdate YYYY-MM-DD -enddate YYYY-MM-DD
+    # <this> --startdate YYYY-MM-DD --enddate YYYY-MM-DD --efforthours <hours> 
+    # <this> --startdate YYYY-MM-DD --enddate YYYY-MM-DD --efforthours <hours> --detailed
 
-    if len(sys.argv) not in [5, 6, 7, 8]:
+    if len(sys.argv) not in [7, 8]:
         print_help()
         sys.exit(1)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-startdate", help="Start date")
-    parser.add_argument("-enddate", help="End date")
-    parser.add_argument("-detailed", help="Show detailed results", action="store_true")
-    parser.add_argument("-hoursoff", help="Hours off by developers during this time period (vacation, sick days, etc.")
+    parser.add_argument("--startdate", help="Start date")
+    parser.add_argument("--enddate", help="End date")
+    parser.add_argument("--detailed", help="Show detailed results", action="store_true")
+    parser.add_argument("--efforthours", help="Total effort hours")
     args = parser.parse_args()
 
     start_datetime = args.startdate
     end_datetime = args.enddate
-    hours_off = 0
+    total_effort_hours = 480 # Default value (12 developers * 5 days @ 8 hrs/day). We never actually use this!
 
     # Validate input
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', start_datetime):
@@ -56,18 +57,20 @@ def parse_args():
     except:
         print(f"Error: End date {end_datetime} is not a valid date")
         sys.exit(1)
-    if args.hoursoff is not None:
+    if args.efforthours is None:
+        print(f"Error: Must include total effort hours with the --efforthours flag")
+    else:
         try:
-            hours_off = int(args.hoursoff)
+            total_effort_hours = int(args.efforthours)
         except:
-            print(f"Error: -hoursoff must supply an integer number of developer hours off")
+            print(f"Error: --efforthours must supply an integer number of total effort hours worked")
             sys.exit(1)
 
     return {
         "start_datetime": start_datetime,
         "end_datetime": end_datetime,
         "detailed": args.detailed,
-        "hours_off": hours_off
+        "total_effort_hours": total_effort_hours
     }
 
 
@@ -82,7 +85,7 @@ def main():
     start_datetime = args["start_datetime"]
     end_datetime = args["end_datetime"]
     detailed = args["detailed"]
-    hours_off = args["hours_off"]
+    total_effort_hours = args["total_effort_hours"]
 
     # Connect to Jira
     options = {"server": "https://opensciencegrid.atlassian.net"}
@@ -96,18 +99,21 @@ def main():
     # These names must match exactly the Jira account names.
     developer_hours = {
         "Mark Coatsworth": 0,
+        "Carl Edquist": 0,
         "Jaime Frey": 0,
         "John (TJ) Knoeller": 0,
+        "Brian Lin": 0,
         "Todd L Miller": 0,
         "Zach Miller": 0,
         "Jason Patton": 0,
+        "Mat Selmeci": 0,
         "Todd Tannenbaum": 0,
         "Greg Thain": 0,
         "Tim Theisen": 0
     }
 
     # Iterate over all Improvement issues
-    issues = jira.search_issues("project = HTCONDOR AND type = Improvement", maxResults=False)
+    issues = jira.search_issues("project = HTCONDOR AND type in (Improvement, Documentation)", maxResults=False)
     for issue in issues:
         issue_worklog = jira.worklogs(issue)
         display_issue_header = True
@@ -129,6 +135,10 @@ def main():
                     print(f"\t\tError: could not add work logged for f{work_item.author.displayName}")
 
         issue_subtasks = issue.fields.subtasks
+        # It's possible we didn't display the issue header before because work was only logged to subtasks
+        # In that case, display the header now
+        if len(issue_subtasks) > 0 and detailed is True and display_issue_header is True:
+            print(f"{issue.key}: {issue.fields.summary}")
         for subtask in issue_subtasks:
             subtask_worklog = jira.worklogs(subtask)
             display_subtask_header = True
@@ -156,10 +166,9 @@ def main():
         print(f"{developer} logged {round(developer_hours[developer], 2)} hours")
         total_hours_logged += developer_hours[developer]
 
-    total_developer_hours_worked = len(developer_hours)*(((end_datetime - start_datetime).days + 1) * 8) - hours_off
     print(f"\nTotal hours logged to HTCONDOR Improvement issues: {total_hours_logged}")
-    print(f"Total developer hours worked (assuming 8-hour work days, minus time off): {total_developer_hours_worked}")
-    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/total_developer_hours_worked, 2)}%\n")
+    print(f"Total effort hours worked during this time period: {total_effort_hours}")
+    print(f"Percent effort logged to Improvement issues: {round(total_hours_logged*100/total_effort_hours, 2)}%\n")
 
 
 if __name__ == "__main__":
