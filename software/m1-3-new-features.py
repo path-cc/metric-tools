@@ -42,10 +42,10 @@ def parse_args():
 
     # Validate input
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', start_datetime):
-        print("Error: -startdate argument must take YYYY-MM-DD format")
+        print("Error: --startdate argument must take YYYY-MM-DD format")
         sys.exit(1)
     if not re.match(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', end_datetime):
-        print("Error: -enddate argument must take YYYY-MM-DD format")
+        print("Error: --enddate argument must take YYYY-MM-DD format")
         sys.exit(1)
     try:
         start_datetime = datetime.strptime(start_datetime + " 00:00:01", "%Y-%m-%d %H:%M:%S")
