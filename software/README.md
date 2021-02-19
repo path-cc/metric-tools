@@ -11,6 +11,14 @@ the appropriate column under the "NSF Weekly Metrics" sheet. At the end of
 each month, we are responsible for aggregating the weekly data into the
 "NSF Metrics" sheet.
 
+## Setup
+
+These scripts can be run from any computer with an internet connection.
+
+Requirements:
+* Python 3.6 or higher
+* Python Jira module, can be installed with: `pip3 install jira`
+
 
 ## M1.1: 80% of distinct changes (as measured by individual tickets) are code reviewed.
 
