@@ -69,9 +69,8 @@ def main():
     num_open_issues = 0
     stale_datetime = target_datetime - timedelta(days=10)
     stale_issues = []
-
-    # Iterate over all open issues
-    issues = jira.search_issues(f"project = HTCONDOR AND type in (Improvement, Bug, Documentation, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned) AND createdDate <= {target_datetime.strftime('%Y-%m-%d')}", maxResults=False)
+    # Iterate over all open issues by HTCSS software developers
+    issues = jira.search_issues(f"project = HTCONDOR AND type in (Improvement, Bug, Documentation, Subtask, Sub-task) AND status not in (Backlog, Done, Abandoned, Blocked) AND assignee in (\"Greg Thain\", \"Jaime Frey\", \"Mark Coatsworth\", \"Tim Theisen\", \"John (TJ) Knoeller\", \"Todd L Miller\", \"Todd Tannenbaum\", \"Zach Miller\") AND createdDate <= {target_datetime.strftime('%Y-%m-%d')}", maxResults=False)
     for issue in issues:
         updated = issue.fields.updated[0:issue.fields.updated.rfind("-")]
         updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")

@@ -53,36 +53,39 @@ Team's effort goes into development of new features. It takes four input
 arguments:
 * **--startdate**: Beginning of the date range in YYYY-MM-DD format
 * **--enddate**: End of the date range in YYYY-MM-DD format
-* **--efforthouts**: The total number of effort hours worked by the software
-team in the date range provided. This is calculated manually by taking the 
-number of developers, multipled by their indivdual % effort working on software
-during a 40-hour work week, minus any time off for vacations or statuatory
-holidays.
+* **--htcsshours**: (optional) The total number of HTCSS hours worked by the
+software team in the date range provided. By default, we assume the HTCSS team 
+will work a total of 288.8 hours in a week (this number was calculated offline
+and is subject to change). 
 * **--detailed**: (optional) Outputs detailed information about how much time
-by logged by which developer, on which date and on what issue.
+was logged by which developer, on which date and on what issue.
+
+**IMPORTANT:** This script assumes that the date range covered between starttime
+and endtime will be no more than a week. We have some baked-in numbers that
+will produce incorrect results if the date range is larger than a week.
 
 Example:
 ```
-$ ./m1-3-new-features.py --startdate 2021-02-08 --enddate 2021-02-12 --efforthours 440
+[$ ./m1-3-new-features.py --startdate 2021-02-15 --enddate 2021-02-19
 
-Between 2021-02-08 and 2021-02-12:
+Between 2021-02-15 and 2021-02-19:
 
-Mark Coatsworth logged 3.0 hours
-Carl Edquist logged 0 hours
-Jaime Frey logged 30.75 hours
-John (TJ) Knoeller logged 22.5 hours
-Brian Lin logged 0 hours
-Todd L Miller logged 14.08 hours
+Mark Coatsworth logged 5.0 hours
+Jaime Frey logged 6.0 hours
+John (TJ) Knoeller logged 3.0 hours
+Todd L Miller logged 12.25 hours
 Zach Miller logged 0 hours
-Jason Patton logged 2.0 hours
-Mat Selmeci logged 1.5 hours
-Todd Tannenbaum logged 12.0 hours
-Greg Thain logged 1.0 hours
-Tim Theisen logged 20.0 hours
+Todd Tannenbaum logged 1.38 hours
+Greg Thain logged 8.0 hours
+Tim Theisen logged 15.58 hours
+Miron Livny assumed 6.0 hours
+Christina Koch assumed 8.0 hours
+Todd Tannenbaum assumed 5.0 project management hours
 
-Total hours logged to HTCONDOR Improvement issues: 106.83
-Total effort hours worked during this time period: 440
-Percent effort logged to Improvement issues: 24.28%
+Total hours worked HTCONDOR Improvement issues: 70.21
+Total HTCSS hours worked during this time period: 288.8
+Percent effort logged to Improvement issues: 24.31%
+
 
 ```
 
