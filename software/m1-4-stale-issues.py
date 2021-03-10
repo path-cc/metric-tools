@@ -76,8 +76,11 @@ def main():
         updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")
         if detailed is True:
             print(f"{issue.key}: {issue.fields.summary}, Updated: {datetime.strftime(updated_datetime, '%Y-%m-%d %H:%M:%S')}")
+        if len(issue.fields.subtasks) > 0:
+            if detailed is True:
+                print(f"\tThis issue has subtasks, skipping it.")
+            continue
         num_open_issues += 1
-        
         if updated_datetime < stale_datetime:
             if detailed is True:
                 print("\tThis issue is stale!")
