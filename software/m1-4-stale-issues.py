@@ -76,15 +76,24 @@ def main():
         updated_datetime = datetime.strptime(updated, "%Y-%m-%dT%H:%M:%S.%f")
         if detailed is True:
             print(f"{issue.key}: {issue.fields.summary}, Updated: {datetime.strftime(updated_datetime, '%Y-%m-%d %H:%M:%S')}")
+        has_active_subtasks = False
         if len(issue.fields.subtasks) > 0:
+            for subtask in issue.fields.subtasks:
+                subtask_status = str(subtask.fields.status)
+                if detailed is True:
+                    print(f"\tSubtask {subtask.key} status: {subtask_status}")
+                if subtask_status not in ["Backlog", "Done", "Abandoned", "Blocked"]:
+                    has_active_subtasks = True
+                    continue
+        if has_active_subtasks is False:
+            num_open_issues += 1
+            if updated_datetime < stale_datetime:
+                if detailed is True:
+                    print("\tThis issue is stale!")
+                stale_issues.append(issue.key)
+        else:
             if detailed is True:
-                print(f"\tThis issue has subtasks, skipping it.")
-            continue
-        num_open_issues += 1
-        if updated_datetime < stale_datetime:
-            if detailed is True:
-                print("\tThis issue is stale!")
-            stale_issues.append(issue.key)
+                print(f"\tThis issue has active subtasks, skipping it.")
 
     # All done! Output results
     print(f"\nAs of {target_datetime.strftime('%Y-%m-%d')}:\n")
