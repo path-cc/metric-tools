@@ -1,0 +1,198 @@
+from elasticsearch import Elasticsearch
+from elasticsearch_dsl import Search, A, Q
+import datetime
+import pandas as pd
+import dateutil.parser as parser
+
+GRACC = "https://gracc.opensciencegrid.org/q"
+
+HOUR = 3600
+def getUsersPerDay():
+
+    endtime = datetime.datetime.now()
+    # 6 months back
+    starttime = endtime - datetime.timedelta(days=182)
+    es = Elasticsearch(
+        [GRACC],
+        timeout=300,
+        use_ssl=True,
+        verify_certs=True
+    )
+
+    MAXSZ = 2 ** 30
+    index = "gracc.osg.summary"
+    s = Search(using=es, index=index)
+    # Starttime and endtime are both datetime objects
+    s = s.query(
+        "bool",
+        filter=[
+            Q("range", EndTime={"gte": starttime, "lt": endtime})
+            & Q("term", ResourceType="Payload")
+            & Q("term", VOName="osg")
+            & (Q("term", ProbeName="condor:login04.osgconnect.net") | 
+               Q("term", ProbeName="condor:login05.osgconnect.net"))
+        ],
+    )
+
+    bkt = s.aggs
+    bkt = bkt.bucket("EndTime", A('date_histogram', field="EndTime", calendar_interval="1d"))
+    bkt = bkt.bucket("DN", A("terms", size=MAXSZ, field="DN"))
+    bkt.metric("CoreHours", 'sum', field="CoreHours", missing=0)
+
+    print(s.to_dict())
+    response = s.execute()
+
+    results_dict = {}
+    for bucket in response.aggregations["EndTime"]["buckets"]:
+        date = bucket["key"]
+        results_dict[date] = {}
+        for user in bucket['DN']['buckets']:
+            username = user['key'] # .replace("/OU=LocalUser/CN=", "")
+            results_dict[date][username] = user['CoreHours']['value']
+            #print(username)
+        #print(bucket.to_dict())
+
+    df = pd.DataFrame(results_dict)
+    df = df.fillna(0)
+    df.columns = pd.to_datetime([x*1000000 for x in df.columns])
+    return df
+    #print(response.aggregations.to_dict())
+
+    #return {f["key"] for f in response.aggregations["Organization"]["buckets"]}
+
+class UserAttributes:
+    def __init__(self):
+        self.njobs = 0
+        self.queuetime = 0
+        self.walltime = 0
+        self.corehours = 0
+        self.starttime = None
+        self.endtime = None
+        self.idledays = 0
+        self.user = ""
+
+def getIdleUsers(perDay: pd.DataFrame):
+    """
+    Find the users that had more than 14 days of 0 usage before 1000 hours of usage.
+
+    returns: list(UserAttributes)
+    """
+    user_days = []
+    # Loop through each row (person), searching for 2 weeks (14 days) of 0's, then some usage.
+    for user, row in perDay.iterrows():
+        numZeros = 0
+        tempUsage = 0
+        days = []
+        # For each day in the search period
+        for day, value in row.iteritems():
+            if value == 0:
+                numZeros += 1
+            elif numZeros > 14:
+                # Found sudden usage after more than 2 weeks of no usage
+                
+                tempUsage += value
+                days.append(day)
+                if tempUsage >= 1000:
+                    #print("User:", user, "has usage of", row[day], "after", numZeros, "of 0 usage")
+                    userAttr = UserAttributes()
+                    userAttr.user = user
+                    userAttr.idledays = numZeros
+                    userAttr.starttime = days[0]
+                    userAttr.endtime = days[-1]
+                    user_days.append(userAttr)
+                    tempUsage = 0
+                    numZeros = 0
+                    days = []
+        
+    return user_days
+
+def generateRawQuery(user, starttime, endtime):
+    """
+    Generate the raw query to get all usage for a user between starttime and endtime.
+    """
+    es = Elasticsearch(
+        [GRACC],
+        timeout=300,
+        use_ssl=True,
+        verify_certs=True
+    )
+    endtime = endtime + datetime.timedelta(days=1)
+    MAXSZ = 2 ** 30
+    index = "gracc.osg.raw*"
+    s = Search(using=es, index=index)
+    # Starttime and endtime are both datetime objects
+    print("Querying for user {} between {} and {}".format(user, starttime, endtime))
+    s = s.query(
+        "bool",
+        filter=[
+            Q("range", EndTime={"gte": starttime, "lt": endtime})
+            & Q("term", ResourceType="Payload")
+            & Q("term", DN=user) 
+        ],
+    )
+    #print(s.to_dict())
+    return s
+
+
+
+
+def getQueueTimes(users):
+    """
+    Loop through the raw usage to find the first 1000 hours during the interesting "days" for each user.
+    Calculate the average time in queue as (EndTime - QueueTime) - WallTime
+    """
+    # Create a mapping of user to userAttributes
+
+    userAttrDict = {}
+    for userAttr in users:
+        if userAttr.starttime < parser.parse("2021-03-09"):
+            #print("Before QueueTime available")
+            continue
+        found1000 = False
+        s = generateRawQuery(userAttr.user, userAttr.starttime, userAttr.endtime)
+        for record in s.scan():
+            userAttr.njobs += 1
+            userAttr.walltime += record['WallDuration']
+            userAttr.corehours += record['CoreHours']
+            if 'QueueTime' in record:
+                userAttr.queuetime += (parser.parse(record['EndTime']).timestamp() - parser.parse(record['QueueTime']).timestamp()) - record['WallDuration']
+            else:
+                print("QueueTime not found when it should be for probe:{}")
+            # check if we have 1000 hours
+            if userAttr.corehours > 1000:
+                found1000 = True
+                break
+        if found1000:
+            print("Found the user: {} with QueueTime (hours): {} for CoreHours: {}".format(userAttr.user, userAttr.queuetime/HOUR, userAttr.corehours))
+        else:
+            print("Did not find 1000 hours of usage for user: {} in set of days: {}-{}".format(userAttr.user, setDays[0], setDays[-1]))
+
+    return users
+
+
+
+
+def main():
+    # Find all users with any usage in the last 1 month
+    perDay = getUsersPerDay()
+
+    # Gather per-day statistics for each user
+    users = getIdleUsers(perDay)
+    #print(users)
+
+    # Queue times
+    queueTimes = getQueueTimes(users)
+    columnNames = ["User", "Start Time", "End Time", "Hours In Queue", "Core Hours", "Idle Days"]
+    df = pd.DataFrame(columns = columnNames)
+    i = 0
+    for userAttr in queueTimes:
+        df.loc[i] = [userAttr.user, userAttr.starttime, userAttr.endtime, userAttr.queuetime/HOUR, userAttr.corehours, userAttr.idledays]
+        i+= 1
+    
+    df = df.loc[df["Core Hours"] > 0]
+    print(df)
+
+
+
+if __name__ == "__main__":
+    main()
