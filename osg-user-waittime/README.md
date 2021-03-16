@@ -25,6 +25,8 @@ A simple job's lifetime:
     ---  In Queue
     +++  Job Running
 
+                             WallDuration
+                      | - - - - - - - - - - - -|
     ------------------++++++++++++++++++++++++++
     \                 \                         \
      Job submitted     Job starts                Job exits
@@ -32,6 +34,8 @@ A simple job's lifetime:
 
 A complicated job's lifetime:
 
+                          WallDuration                        WallDuration (added to previous)
+                      | - - - - - - - - - -|               | - - - - - - - - - |
     ------------------++++++++++++++++++++++---------------+++++++++++++++++++++
     \                 \                     \               \                   \
      Job submitted     Job starts            Job Preempted   Job starts          Job exists
