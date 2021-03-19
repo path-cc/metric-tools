@@ -180,14 +180,14 @@ def main():
 
     # Queue times
     queueTimes = getQueueTimes(projects)
-    columnNames = ["ProjectName", "Start Time", "End Time", "Idle Days", "Hours In Queue", "Core Hours", "Number of Jobs"]
+    columnNames = ["ProjectName", "Start Time", "End Time", "Idle Days", "Aggregate Hours In Queue", "Aggregate Core Hours", "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
     i = 0
     for projectAttr in queueTimes:
         df.loc[i] = [projectAttr.project, projectAttr.starttime, projectAttr.endtime, projectAttr.idledays, projectAttr.queuetime/HOUR, projectAttr.corehours, projectAttr.njobs]
         i+= 1
     
-    df = df.loc[df["Core Hours"] > 0]
+    df = df.loc[df["Aggregate Core Hours"] > 0]
 
     with open("output.csv", "w") as output_csv:
         output_csv.write(df.to_csv(index=False))
