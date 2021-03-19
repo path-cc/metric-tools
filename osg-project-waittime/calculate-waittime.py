@@ -128,6 +128,7 @@ def generateRawQuery(project, starttime, endtime):
             & Q("term", ProjectName=project) 
         ],
     )
+    s = s.sort("StartTime")
     #print(s.to_dict())
     return s
 
@@ -140,7 +141,6 @@ def getQueueTimes(projects):
     Calculate the average time in queue as (EndTime - QueueTime) - WallTime
     """
     # Create a mapping of project to projectAttributes
-
     projectAttrDict = {}
     for projectAttr in projects:
         if projectAttr.starttime < parser.parse("2021-03-09"):
@@ -148,6 +148,7 @@ def getQueueTimes(projects):
             continue
         found1000 = False
         s = generateRawQuery(projectAttr.project, projectAttr.starttime, projectAttr.endtime)
+        s = s.params(preserve_order=True)
         for record in s.scan():
             projectAttr.njobs += 1
             projectAttr.walltime += record['WallDuration']
@@ -163,7 +164,7 @@ def getQueueTimes(projects):
         if found1000:
             print("Found the project: {} with QueueTime (hours): {} for CoreHours: {}".format(projectAttr.project, projectAttr.queuetime/HOUR, projectAttr.corehours))
         else:
-            print("Did not find 1000 hours of usage for project: {} in set of days: {}-{}".format(projectAttr.project, setDays[0], setDays[-1]))
+            print("Did not find 1000 hours of usage for project: {} in set of days: {}-{}".format(projectAttr.project, projectAttr.starttime, projectAttr.endtime))
 
     return projects
 
@@ -179,11 +180,11 @@ def main():
 
     # Queue times
     queueTimes = getQueueTimes(projects)
-    columnNames = ["ProjectName", "Start Time", "End Time", "Hours In Queue", "Core Hours", "Idle Days"]
+    columnNames = ["ProjectName", "Start Time", "End Time", "Idle Days", "Hours In Queue", "Core Hours", "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
     i = 0
     for projectAttr in queueTimes:
-        df.loc[i] = [projectAttr.project, projectAttr.starttime, projectAttr.endtime, projectAttr.queuetime/HOUR, projectAttr.corehours, projectAttr.idledays]
+        df.loc[i] = [projectAttr.project, projectAttr.starttime, projectAttr.endtime, projectAttr.idledays, projectAttr.queuetime/HOUR, projectAttr.corehours, projectAttr.njobs]
         i+= 1
     
     df = df.loc[df["Core Hours"] > 0]
