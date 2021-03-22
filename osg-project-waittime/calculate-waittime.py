@@ -7,7 +7,11 @@ import dateutil.parser as parser
 GRACC = "https://gracc.opensciencegrid.org/q"
 
 HOUR = 3600
-def getProjectsPerDay():
+
+# A mapping of usernames to projects
+usernameToProject = {}
+
+def getUsersPerDay():
 
     endtime = datetime.datetime.now()
     # 6 months back
@@ -36,6 +40,7 @@ def getProjectsPerDay():
 
     bkt = s.aggs
     bkt = bkt.bucket("EndTime", A('date_histogram', field="EndTime", calendar_interval="1d"))
+    bkt = bkt.bucket("DN", A("terms", size=MAXSZ, field="DN"))
     bkt = bkt.bucket("ProjectName", A("terms", size=MAXSZ, field="ProjectName"))
     bkt.metric("CoreHours", 'sum', field="CoreHours", missing=0)
 
@@ -46,9 +51,14 @@ def getProjectsPerDay():
     for bucket in response.aggregations["EndTime"]["buckets"]:
         date = bucket["key"]
         results_dict[date] = {}
-        for project in bucket['ProjectName']['buckets']:
-            projectname = project['key']
-            results_dict[date][projectname] = project['CoreHours']['value']
+        for user in bucket['DN']['buckets']:
+            username = user['key']
+            for project in user['ProjectName']['buckets']:
+                if username not in usernameToProject:
+                    usernameToProject[username] = []
+                if project['key'] not in usernameToProject[username]:
+                    usernameToProject[username].append(project['key'])
+                results_dict[date][username] = project['CoreHours']['value']
         #print(bucket.to_dict())
 
     df = pd.DataFrame(results_dict)
@@ -59,7 +69,7 @@ def getProjectsPerDay():
 
     #return {f["key"] for f in response.aggregations["Organization"]["buckets"]}
 
-class ProjectAttributes:
+class UserAttributes:
     def __init__(self):
         self.njobs = 0
         self.queuetime = 0
@@ -69,16 +79,17 @@ class ProjectAttributes:
         self.endtime = None
         self.idledays = 0
         self.project = ""
+        self.username = ""
 
-def getIdleProjects(perDay: pd.DataFrame):
+def getIdleUsers(perDay: pd.DataFrame):
     """
-    Find the projects that had more than 14 days of 0 usage before 1000 hours of usage.
+    Find the users that had more than 14 days of 0 usage before 1000 hours of usage.
 
-    returns: list(ProjectAttributes)
+    returns: list(UserAttributes)
     """
-    project_days = []
+    user_days = []
     # Loop through each row (person), searching for 2 weeks (14 days) of 0's, then some usage.
-    for project, row in perDay.iterrows():
+    for user, row in perDay.iterrows():
         numZeros = 0
         tempUsage = 0
         days = []
@@ -92,21 +103,21 @@ def getIdleProjects(perDay: pd.DataFrame):
                 tempUsage += value
                 days.append(day)
                 if tempUsage >= 1000:
-                    projectAttr = ProjectAttributes()
-                    projectAttr.project = project
-                    projectAttr.idledays = numZeros
-                    projectAttr.starttime = days[0]
-                    projectAttr.endtime = days[-1]
-                    project_days.append(projectAttr)
+                    userAttr = UserAttributes()
+                    userAttr.username = user
+                    userAttr.idledays = numZeros
+                    userAttr.starttime = days[0]
+                    userAttr.endtime = days[-1]
+                    user_days.append(userAttr)
                     tempUsage = 0
                     numZeros = 0
                     days = []
         
-    return project_days
+    return user_days
 
-def generateRawQuery(project, starttime, endtime):
+def generateRawQuery(user, starttime, endtime):
     """
-    Generate the raw query to get all usage for a project between starttime and endtime.
+    Generate the raw query to get all usage for a user between starttime and endtime.
     """
     es = Elasticsearch(
         [GRACC],
@@ -119,13 +130,13 @@ def generateRawQuery(project, starttime, endtime):
     index = "gracc.osg.raw*"
     s = Search(using=es, index=index)
     # Starttime and endtime are both datetime objects
-    print("Querying for project {} between {} and {}".format(project, starttime, endtime))
+    print("Querying for user {} between {} and {}".format(user, starttime, endtime))
     s = s.query(
         "bool",
         filter=[
             Q("range", EndTime={"gte": starttime, "lt": endtime})
             & Q("term", ResourceType="Payload")
-            & Q("term", ProjectName=project) 
+            & Q("term", DN=user) 
         ],
     )
     s = s.sort("StartTime")
@@ -135,59 +146,63 @@ def generateRawQuery(project, starttime, endtime):
 
 
 
-def getQueueTimes(projects):
+def getQueueTimes(users):
     """
-    Loop through the raw usage to find the first 1000 hours during the interesting "days" for each project.
+    Loop through the raw usage to find the first 1000 hours during the interesting "days" for each user.
     Calculate the average time in queue as (EndTime - QueueTime) - WallTime
     """
-    # Create a mapping of project to projectAttributes
-    projectAttrDict = {}
-    for projectAttr in projects:
-        if projectAttr.starttime < parser.parse("2021-03-09"):
+    # Create a mapping of user to userAttributes
+    userAttrDict = {}
+    for userAttr in users:
+        if userAttr.starttime < parser.parse("2021-03-09"):
             #print("Before QueueTime available")
             continue
         found1000 = False
-        s = generateRawQuery(projectAttr.project, projectAttr.starttime, projectAttr.endtime)
+        s = generateRawQuery(userAttr.username, userAttr.starttime, userAttr.endtime)
         s = s.params(preserve_order=True)
         for record in s.scan():
-            projectAttr.njobs += 1
-            projectAttr.walltime += record['WallDuration']
-            projectAttr.corehours += record['CoreHours']
+            userAttr.njobs += 1
+            userAttr.walltime += record['WallDuration']
+            userAttr.corehours += record['CoreHours']
             if 'QueueTime' in record:
-                projectAttr.queuetime += (parser.parse(record['EndTime']).timestamp() - parser.parse(record['QueueTime']).timestamp()) - record['WallDuration']
+                userAttr.queuetime += (parser.parse(record['EndTime']).timestamp() - parser.parse(record['QueueTime']).timestamp()) - record['WallDuration']
             else:
                 print("QueueTime not found when it should be for probe:{}")
             # check if we have 1000 hours
-            if projectAttr.corehours > 1000:
+            if userAttr.corehours > 1000:
                 found1000 = True
                 break
         if found1000:
-            print("Found the project: {} with QueueTime (hours): {} for CoreHours: {}".format(projectAttr.project, projectAttr.queuetime/HOUR, projectAttr.corehours))
+            print("Found the user: {} with QueueTime (hours): {} for CoreHours: {}".format(userAttr.username, userAttr.queuetime/HOUR, userAttr.corehours))
         else:
-            print("Did not find 1000 hours of usage for project: {} in set of days: {}-{}".format(projectAttr.project, projectAttr.starttime, projectAttr.endtime))
+            print("Did not find 1000 hours in {} jobs of usage for user: {} in set of days: {}-{}".format(userAttr.njobs, userAttr.username, userAttr.starttime, userAttr.endtime))
 
-    return projects
+    return users
 
 
 
 
 def main():
-    # Find all projects with any usage in the last 1 month
-    perDay = getProjectsPerDay()
+    # Find all user with any usage in the last 1 month
+    perDay = getUsersPerDay()
 
-    # Gather per-day statistics for each project
-    projects = getIdleProjects(perDay)
+    # Gather per-day statistics for each user
+    users = getIdleUsers(perDay)
 
     # Queue times
-    queueTimes = getQueueTimes(projects)
-    columnNames = ["ProjectName", "Start Time", "End Time", "Idle Days", "Aggregate Hours In Queue", "Aggregate Core Hours", "Number of Jobs"]
+    queueTimes = getQueueTimes(users)
+    columnNames = ["Username", "ProjectName", "Start Time", "End Time", "Days of Zero Usage", "Aggregate Hours In Queue", "Aggregate Core Hours", "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
     i = 0
-    for projectAttr in queueTimes:
-        df.loc[i] = [projectAttr.project, projectAttr.starttime, projectAttr.endtime, projectAttr.idledays, projectAttr.queuetime/HOUR, projectAttr.corehours, projectAttr.njobs]
+    for userAttr in queueTimes:
+        df.loc[i] = [userAttr.username, ",".join(usernameToProject[userAttr.username]), userAttr.starttime, userAttr.endtime, userAttr.idledays, userAttr.queuetime/HOUR, userAttr.corehours, userAttr.njobs]
         i+= 1
     
     df = df.loc[df["Aggregate Core Hours"] > 0]
+
+    def replaceCN(user):
+        return user.replace("/OU=LocalUser/CN=", "")
+    df["Username"] = df["Username"].apply(replaceCN)
 
     with open("output.csv", "w") as output_csv:
         output_csv.write(df.to_csv(index=False))
