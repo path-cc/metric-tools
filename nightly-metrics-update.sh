@@ -34,6 +34,20 @@ cd ../osg-cpu-hours
 
 cd ..
 
+# Clean the environment
+deactivate
+
+# Run the project waittime
+pushd osg-project-waittime
+python3 -m venv venv
+. venv/bin/activate
+pip install -r requirements.txt
+./calculate-waittime.py $START_DATE $END_DATE
+
+# outputs as output.csv
+cp output.csv osg-waittime.csv
+popd
+
 
 # Commit files
 
@@ -41,6 +55,7 @@ OUTFILES=(
   campus-contributions.json
   campuses-with-active-researchers.csv
   osg-cpu-hours.json
+  osg-waittime.csv
 )
 git clone --depth=1 https://github.com/path-cc/metrics
 mv ${OUTFILES[@]} metrics
