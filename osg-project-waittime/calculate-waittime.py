@@ -1,8 +1,11 @@
+#!/usr/bin/env python3
+
 from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, A, Q
 import datetime
 import pandas as pd
 import dateutil.parser as parser
+import argparse
 
 GRACC = "https://gracc.opensciencegrid.org/q"
 
@@ -11,11 +14,17 @@ HOUR = 3600
 # A mapping of usernames to projects
 usernameToProject = {}
 
-def getUsersPerDay():
+def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
+    """
+    Get a table of user's usage by day.  The table will have the format:
+        Users       day     day+1   day+2   ...     day+n
+        <user>      10      0       0       ...     31
+    
+    Where the usage is in CoreHours.
+    """
 
-    endtime = datetime.datetime.now()
     # 6 months back
-    starttime = endtime - datetime.timedelta(days=182)
+    starttime = starttime - datetime.timedelta(days=15)
     es = Elasticsearch(
         [GRACC],
         timeout=300,
@@ -181,10 +190,22 @@ def getQueueTimes(users):
 
 
 
+def add_args():
+
+    argsparser = argparse.ArgumentParser(description='Calculate waittime for users')
+    argsparser.add_argument("starttime", type=str, help="Start Time, for example 2021-03-01")
+    argsparser.add_argument("endtime", type=str, help="End Time, for example 2021-03-31")
+    return argsparser
 
 def main():
+    argsparser = add_args()
+    args = argsparser.parse_args()
+
+    startDatetime = parser.parse(args.starttime)
+    endDatetime = parser.parse(args.endtime)
+
     # Find all user with any usage in the last 1 month
-    perDay = getUsersPerDay()
+    perDay = getUsersPerDay(startDatetime, endDatetime)
 
     # Gather per-day statistics for each user
     users = getIdleUsers(perDay)
