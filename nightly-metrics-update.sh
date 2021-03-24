@@ -45,7 +45,7 @@ pip install -r requirements.txt
 ./calculate-waittime.py $START_DATE $END_DATE
 
 # outputs as output.csv
-cp output.csv osg-waittime.csv
+cp output.csv ../osg-waittime.csv
 popd
 
 
