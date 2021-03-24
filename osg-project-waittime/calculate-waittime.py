@@ -190,6 +190,7 @@ def getQueueTimes(users):
 def add_args():
 
     argsparser = argparse.ArgumentParser(description='Calculate waittime for users')
+    argsparser.add_argument("outputfile", type=str, help="Output File")
     argsparser.add_argument("starttime", type=str, help="Start Time, for example 2021-03-01")
     argsparser.add_argument("endtime", type=str, help="End Time, for example 2021-03-31")
     return argsparser
@@ -220,9 +221,8 @@ def main():
         return user.replace("/OU=LocalUser/CN=", "")
     df["Username"] = df["Username"].apply(replaceCN)
 
-    with open("output.csv", "w") as output_csv:
+    with open(args.outputfile, "w") as output_csv:
         output_csv.write(df.to_csv(index=False))
-    print(df.to_csv(index=False))
 
 
 
