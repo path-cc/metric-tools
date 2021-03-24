@@ -53,7 +53,6 @@ def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
     bkt = bkt.bucket("ProjectName", A("terms", size=MAXSZ, field="ProjectName"))
     bkt.metric("CoreHours", 'sum', field="CoreHours", missing=0)
 
-    print(s.to_dict())
     response = s.execute()
 
     results_dict = {}
