@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 
 python3 -m venv venv
 . venv/bin/activate
-pip install -r campuses-with-active-researchers/requirements.txt
+pip install -r requirements.txt
 
 
 # run metrics
@@ -32,19 +32,10 @@ cd ../campus-contributions
 cd ../osg-cpu-hours
 ./osg-cpu-hours.py -o ../osg-cpu-hours.json
 
-cd ..
-
-# Clean the environment
-deactivate
-
-# Run the project waittime
-pushd osg-project-waittime
-python3 -m venv venv
-. venv/bin/activate
-pip install -r requirements.txt
+cd ../osg-project-waittime
 ./calculate-waittime.py ../osg-waittime.csv $START_DATE $END_DATE
 
-popd
+cd ..
 
 
 # Commit files
