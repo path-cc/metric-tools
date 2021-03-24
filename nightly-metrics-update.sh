@@ -32,13 +32,10 @@ cd ../campus-contributions
 cd ../osg-cpu-hours
 ./osg-cpu-hours.py -o ../osg-cpu-hours.json
 
-cd ..
-
-# Run the project waittime
-pushd osg-project-waittime
+cd ../osg-project-waittime
 ./calculate-waittime.py ../osg-waittime.csv $START_DATE $END_DATE
 
-popd
+cd ..
 
 
 # Commit files
