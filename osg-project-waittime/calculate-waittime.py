@@ -6,13 +6,14 @@ import datetime
 import pandas as pd
 import dateutil.parser as parser
 import argparse
+import collections
 
 GRACC = "https://gracc.opensciencegrid.org/q"
 
 HOUR = 3600
 
 # A mapping of usernames to projects
-usernameToProject = {}
+usernameToProject = collections.defaultdict(set)
 
 def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
     """
@@ -62,10 +63,7 @@ def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
         for user in bucket['DN']['buckets']:
             username = user['key']
             for project in user['ProjectName']['buckets']:
-                if username not in usernameToProject:
-                    usernameToProject[username] = []
-                if project['key'] not in usernameToProject[username]:
-                    usernameToProject[username].append(project['key'])
+                usernameToProject[username].add(project['key'])
                 results_dict[date][username] = project['CoreHours']['value']
         #print(bucket.to_dict())
 
