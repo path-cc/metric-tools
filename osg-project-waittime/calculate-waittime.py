@@ -211,10 +211,8 @@ def main():
     queueTimes = getQueueTimes(users)
     columnNames = ["Username", "ProjectName", "Start Time", "End Time", "Days of Zero Usage", "Aggregate Hours In Queue", "Aggregate Core Hours", "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
-    i = 0
-    for userAttr in queueTimes:
+    for i, userAttr in enumerate(queueTimes):
         df.loc[i] = [userAttr.username, ",".join(usernameToProject[userAttr.username]), userAttr.starttime, userAttr.endtime, userAttr.idledays, userAttr.queuetime/HOUR, userAttr.corehours, userAttr.njobs]
-        i+= 1
     
     df = df.loc[df["Aggregate Core Hours"] > 0]
 
