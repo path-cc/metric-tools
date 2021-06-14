@@ -7,10 +7,12 @@ import pandas as pd
 import dateutil.parser as parser
 import argparse
 import collections
+import statistics
 
 GRACC = "https://gracc.opensciencegrid.org/q"
 
 HOUR = 3600
+MINUTE = 60
 
 # A mapping of usernames to projects
 usernameToProject = collections.defaultdict(set)
@@ -86,6 +88,9 @@ class UserAttributes:
         self.idledays = 0
         self.project = ""
         self.username = ""
+        self.maxqueue = 0
+        self.std = 0
+        self.quantiles = []
 
 def getIdleUsers(perDay: pd.DataFrame):
     """
@@ -166,17 +171,26 @@ def getQueueTimes(users):
         found1000 = False
         s = generateRawQuery(userAttr.username, userAttr.starttime, userAttr.endtime)
         s = s.params(preserve_order=True)
+        queuetimes = []
         for record in s.scan():
             userAttr.njobs += 1
             userAttr.walltime += record['WallDuration']
             userAttr.corehours += record['CoreHours']
+            queuetime = 0
             if 'QueueTime' in record:
-                userAttr.queuetime += (parser.parse(record['EndTime']).timestamp() - parser.parse(record['QueueTime']).timestamp()) - record['WallDuration']
+                queuetime = (parser.parse(record['EndTime']).timestamp() - parser.parse(record['QueueTime']).timestamp()) - record['WallDuration']
+                userAttr.queuetime += queuetime
             else:
                 print("QueueTime not found when it should be for probe:{}")
+
+            queuetimes.append(queuetime)
             # check if we have 1000 hours
             if userAttr.corehours > 1000:
                 found1000 = True
+                userAttr.maxqueue = max(queuetimes)
+                if (userAttr.njobs > 1):
+                    userAttr.std = statistics.stdev(queuetimes)
+                    userAttr.quantiles = statistics.quantiles(queuetimes, n=10)
                 break
         if found1000:
             print("Found the user: {} with QueueTime (hours): {} for CoreHours: {}".format(userAttr.username, userAttr.queuetime/HOUR, userAttr.corehours))
@@ -210,10 +224,32 @@ def main():
 
     # Queue times
     queueTimes = getQueueTimes(users)
-    columnNames = ["Username", "ProjectName", "Start Time", "End Time", "Days of Zero Usage", "Aggregate Hours In Queue", "Aggregate Core Hours", "Number of Jobs"]
+    columnNames = ["Username", 
+                   "ProjectName", 
+                   "Start Time", 
+                   "End Time", 
+                   "Days of Zero Usage", 
+                   "Aggregate Hours In Queue", 
+                   "Max Minutes In Queue", 
+                   "Average Minutes In Queue", 
+                   "Standard Deviation in Minutes",
+                   "90% Queue Time in Minutes", 
+                   "Aggregate Core Hours", 
+                   "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
     for i, userAttr in enumerate(queueTimes):
-        df.loc[i] = [userAttr.username, ",".join(usernameToProject[userAttr.username]), userAttr.starttime, userAttr.endtime, userAttr.idledays, userAttr.queuetime/HOUR, userAttr.corehours, userAttr.njobs]
+        df.loc[i] = [userAttr.username, 
+                     ",".join(usernameToProject[userAttr.username]), 
+                     userAttr.starttime, 
+                     userAttr.endtime, 
+                     userAttr.idledays, 
+                     userAttr.queuetime/HOUR, 
+                     userAttr.maxqueue/MINUTE, 
+                     (userAttr.queuetime/userAttr.njobs)/MINUTE,  # "Average Minutes In Queue", 
+                     userAttr.std / MINUTE, # "Standard Deviation in Minutes"
+                     userAttr.quantiles[8]/MINUTE if userAttr.njobs > 1 else 0,  # "90% Queue Time in Minutes"
+                     userAttr.corehours, 
+                     userAttr.njobs]
     
     df = df.loc[df["Aggregate Core Hours"] > 0]
 
