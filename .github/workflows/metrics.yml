@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+  repository_dispatch:
+    types: [dispatch-metrics]
+
+  workflow_dispatch:
+
   schedule:
     - cron: '0 0 * * *'
 
