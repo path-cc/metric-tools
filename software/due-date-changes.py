@@ -24,15 +24,20 @@ def print_help(stream=sys.stderr):
 def parse_args():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--projects", 
+    parser.add_argument("-projects", 
         help="Comma-separated list of project names (ie. HTCONDOR,SOFTWARE)",
         default="HTCONDOR,SOFTWARE")
+    parser.add_argument("-o", 
+        help="Output file",
+        default=None)
     args = parser.parse_args()
 
     projects = args.projects
+    output_file = args.o
 
     return {
-        "projects": projects
+        "projects": projects,
+        "output_file": output_file
     }
 
 
@@ -45,13 +50,14 @@ def main():
         print(f"Failed to parse arguments: {err}", file=sys.stderr)
 
     projects = args["projects"]
+    output_file = args["output_file"]
 
     # Connect to Jira
     options = {"server": "https://opensciencegrid.atlassian.net"}
     jira = JIRA(options)
 
     # Output CSV headers
-    print("Issue key,Assignee,Original Due Date,Current Due Date,Number of Due Date Changes")
+    output_data = "Issue key,Assignee,Original Due Date,Current Due Date,Number of Due Date Changes\n"
 
     # Now iterate over the projects and list their issues
     for project in projects.split(","):
@@ -70,8 +76,15 @@ def main():
                             duedate_original = getattr(item, "from")
                         duedate_changes += 1
                         duedate_current = item.to
-            print(f"{issue.key},{issue.fields.assignee},{duedate_original},{duedate_current},{duedate_changes}")
+            output_data += f"{issue.key},{issue.fields.assignee},{duedate_original},{duedate_current},{duedate_changes}\n"
 
+    # Write results to output_file (or stdout is no output file defined)
+    if output_file is None:
+        print(output_data)
+    else:
+        file = open(output_file, "w")
+        file.write(output_data)
+        file.close()
 
 if __name__ == "__main__":
     main()

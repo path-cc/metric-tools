@@ -36,7 +36,7 @@ cd ../osg-project-waittime
 ./calculate-waittime.py ../osg-waittime.csv $START_DATE $END_DATE
 
 cd ../software
-./due-date-changes.py ../software-due-date-changes.csv
+./due-date-changes.py -o ../software-due-date-changes.csv
 
 cd ..
 
