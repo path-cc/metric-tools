@@ -32,12 +32,9 @@ def parse_args():
         default=None)
     args = parser.parse_args()
 
-    projects = args.projects
-    output_file = args.o
-
     return {
-        "projects": projects,
-        "output_file": output_file
+        "projects": args.projects,
+        "output_file": args.o
     }
 
 
@@ -61,7 +58,7 @@ def main():
 
     # Now iterate over the projects and list their issues
     for project in projects.split(","):
-        issues = jira.search_issues(f"project = {project} AND status != Backlog", expand="changelog", maxResults=False)
+        issues = jira.search_issues(f"project = {project} AND statusCategory != \"To Do\"", expand="changelog", maxResults=False)
         #issues = jira.search_issues(f"key = HTCONDOR-344", expand="changelog", maxResults=False)
         for issue in issues:
             duedate_current = issue.fields.duedate
@@ -69,7 +66,7 @@ def main():
             duedate_changes = 0
             issue_changelog = issue.changelog.histories
             # Iterate over the changelog in reverse so we get the oldest changes first
-            for change in issue_changelog[::-1]:
+            for change in reversed(issue_changelog):
                 for item in change.items:
                     if item.field == "duedate":
                         if duedate_changes == 0:
