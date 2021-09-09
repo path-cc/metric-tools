@@ -13,7 +13,8 @@ from jira import JIRA
 def parse_args():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-projects", 
+    parser.add_argument("-p",
+                        "--projects",
         help="Comma-separated list of project names (ie. HTCONDOR,SOFTWARE)",
         default="HTCONDOR,SOFTWARE")
     parser.add_argument("-o", 
@@ -60,7 +61,7 @@ def main():
 
     # Write results to output_file (or stdout is no output file defined)
     if output_file is None:
-        print(output_data)
+        sys.stdout.write(output_data)
     else:
         file = open(output_file, "w")
         file.write(output_data)
