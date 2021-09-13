@@ -35,6 +35,9 @@ cd ../osg-cpu-hours
 cd ../osg-project-waittime
 ./calculate-waittime.py ../osg-waittime.csv $START_DATE $END_DATE
 
+cd ../software
+./due-date-changes.py -o ../software-due-date-changes.csv
+
 cd ..
 
 
@@ -45,6 +48,7 @@ OUTFILES=(
   campuses-with-active-researchers.csv
   osg-cpu-hours.json
   osg-waittime.csv
+  software-due-date-changes.csv
 )
 git clone --depth=1 https://github.com/path-cc/metrics
 mv ${OUTFILES[@]} metrics
