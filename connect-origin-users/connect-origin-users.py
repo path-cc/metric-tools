@@ -38,10 +38,14 @@ def calculate_users(endtime, months):
     endtimeDate = endtimeDate.replace(day=calendar.monthrange(endtimeDate.year, endtimeDate.month)[1], hour=23, minute=59, second=59)
     starttimeDate = endtimeDate - relativedelta.relativedelta(months=months)
     s = s.filter('range', **{'@timestamp': {'gte': starttimeDate, 'lte': endtimeDate}})
-    s = s.query('match', dirname2='/osgconnect/public')
+
+    # Have to use the odd dirname1__keyword so that it matches exactly '/osgconnect', otherwise
+    # it can match substrings such as just osgconnect
+    s = s.query('match', dirname1__keyword='/osgconnect')
     bkt = s.aggs
     bkt = bkt.bucket('timestamp', A('date_histogram', field="@timestamp", calendar_interval="1M"))
     bkt = bkt.bucket('logical_dirname', 'terms', field='logical_dirname.keyword', size=1000)
+    #print(s.to_dict())
     response = s.execute()
     #print(response.aggregations.to_dict())
     months = {}
