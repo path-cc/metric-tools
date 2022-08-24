@@ -38,6 +38,9 @@ cd ../osg-project-waittime
 cd ../software
 ./due-date-changes.py -o ../software-due-date-changes.csv
 
+cd ../connect-origin-users
+./connect-origin-users -o ../connect-origin-users.json
+
 cd ..
 
 
@@ -49,6 +52,7 @@ OUTFILES=(
   osg-cpu-hours.json
   osg-waittime.csv
   software-due-date-changes.csv
+  connect-origin-users.json
 )
 git clone --depth=1 https://github.com/path-cc/metrics
 mv ${OUTFILES[@]} metrics
