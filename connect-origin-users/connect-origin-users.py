@@ -86,7 +86,7 @@ def add_args():
     nowtime = nowtime.replace(day=calendar.monthrange(nowtime.year, nowtime.month)[1])
     defaultTime = nowtime.strftime("%Y-%m-%d")
     argsparser = argparse.ArgumentParser(description='Calculate waittime for users')
-    argsparser.add_argument("--outputfile", "-o" type=str, help="Output File", default="output.txt")
+    argsparser.add_argument("--outputfile", "-o", type=str, help="Output File", default="output.txt")
     argsparser.add_argument("--endtime", type=str, help="End Time, for example {}, will be rounded to the nearest month".format(defaultTime), default=defaultTime)
     argsparser.add_argument("--months", type=int, help="Number of months to look back.  If a user is found in the previous months, they do not count as a new user for the month.", default=6)
     return argsparser
