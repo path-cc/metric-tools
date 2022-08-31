@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-# osg-cpu-hours (the artist formerly known as "bumbly")
+# connect-origin-users
 
-# generates various Core Hours metrics including those in the dashboard panels
-# at the bottom of https://gracc.opensciencegrid.org/
+# Calculate the number of new and active users for the OSG Connect origin
 
 import calendar
 import re
@@ -48,28 +47,28 @@ def calculate_users(endtime, months):
     #print(s.to_dict())
     response = s.execute()
     #print(response.aggregations.to_dict())
-    months = {}
+    monthSets = {}
     for month in response.aggregations.timestamp.buckets:
-        months[month.key_as_string] = set()
+        monthSets[month.key_as_string] = set()
         for user in month.logical_dirname.buckets:
-            months[month.key_as_string].add(user.key)
+            monthSets[month.key_as_string].add(user.key)
 
     # Sort the months and put in an array
     def sort_months(x):
         return parser.parse(x).timestamp()
-    monthsSorted = sorted(months.keys(), key=sort_months)
+    monthsSorted = sorted(monthSets.keys(), key=sort_months)
     #print(monthsSorted)
 
     # For the most recent month, find users that have not be in the previous months
     lastMonth = monthsSorted[len(monthsSorted)-1]
     #print("Active users in last month: {}".format(len(months[lastMonth])))
-    activeUsers = len(months[lastMonth])
+    activeUsers = len(monthSets[lastMonth])
 
     # Calculate the new users by setting the most recent
     # month and subtracting the previous months
-    newUsers = months[lastMonth]
+    newUsers = monthSets[lastMonth]
     for month in monthsSorted[:-1]:
-        newUsers -= months[month]
+        newUsers -= monthSets[month]
     
     output = {
         "Number of new users": len(newUsers),
