@@ -39,7 +39,7 @@ cd ../software
 ./due-date-changes.py -o ../software-due-date-changes.csv
 
 cd ../connect-origin-users
-./connect-origin-users -o ../connect-origin-users.json
+./connect-origin-users.py -o ../connect-origin-users.json
 
 cd ..
 
