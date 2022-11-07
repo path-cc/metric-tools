@@ -109,6 +109,26 @@ def get_organizations_with_active_researchers(
     return {f["key"] for f in response.aggregations["Organization"]["buckets"]}
 
 
+def get_organizations_with_active_researchers__dates(
+    startdate: str, enddate: str
+) -> Set[str]:
+    try:
+        starttime = datetime.datetime.strptime(startdate, "%Y-%m-%d")
+    except ValueError:
+        parser.error("Cannot parse start date")
+    try:
+        endtime = datetime.datetime.strptime(
+            enddate, "%Y-%m-%d"
+        ) + datetime.timedelta(hours=23, minutes=59, seconds=59)
+    except ValueError:
+        parser.error("Cannot parse end date")
+    if starttime > endtime:
+        parser.error("Start date can't be after end date")
+
+    runtime = datetime.datetime.now()
+    return get_organizations_with_active_researchers(starttime, endtime)
+
+
 def main(argv):
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -125,21 +145,9 @@ def main(argv):
 
     args = parser.parse_args(argv[1:])
 
-    try:
-        starttime = datetime.datetime.strptime(args.startdate, "%Y-%m-%d")
-    except ValueError:
-        parser.error("Cannot parse start date")
-    try:
-        endtime = datetime.datetime.strptime(
-            args.enddate, "%Y-%m-%d"
-        ) + datetime.timedelta(hours=23, minutes=59, seconds=59)
-    except ValueError:
-        parser.error("Cannot parse end date")
-    if starttime > endtime:
-        parser.error("Start date can't be after end date")
-
     runtime = datetime.datetime.now()
-    active_organizations = get_organizations_with_active_researchers(starttime, endtime)
+    active_organizations = get_organizations_with_active_researchers__dates(
+            args.startdate, args.enddate)
     ccstar_facilities = get_ccstar_facilities()
 
     # TODO: Project Organizations do not necessarily match Topology Facilities.
