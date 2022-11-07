@@ -110,7 +110,7 @@ def get_organizations_with_active_researchers(
 
 
 def get_organizations_with_active_researchers__dates(
-    startdate: str, enddate: str
+    startdate: str, enddate: str, parser: ArgumentParser
 ) -> Set[str]:
     try:
         starttime = datetime.datetime.strptime(startdate, "%Y-%m-%d")
@@ -147,7 +147,8 @@ def main(argv):
 
     runtime = datetime.datetime.now()
     active_organizations = get_organizations_with_active_researchers__dates(
-            args.startdate, args.enddate)
+        args.startdate, args.enddate, parser
+    )
     ccstar_facilities = get_ccstar_facilities()
 
     # TODO: Project Organizations do not necessarily match Topology Facilities.
