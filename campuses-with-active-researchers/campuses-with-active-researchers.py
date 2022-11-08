@@ -109,6 +109,26 @@ def get_organizations_with_active_researchers(
     return {f["key"] for f in response.aggregations["Organization"]["buckets"]}
 
 
+def get_organizations_with_active_researchers__dates(
+    startdate: str, enddate: str, parser: ArgumentParser
+) -> Set[str]:
+    try:
+        starttime = datetime.datetime.strptime(startdate, "%Y-%m-%d")
+    except ValueError:
+        parser.error("Cannot parse start date")
+    try:
+        endtime = datetime.datetime.strptime(
+            enddate, "%Y-%m-%d"
+        ) + datetime.timedelta(hours=23, minutes=59, seconds=59)
+    except ValueError:
+        parser.error("Cannot parse end date")
+    if starttime > endtime:
+        parser.error("Start date can't be after end date")
+
+    runtime = datetime.datetime.now()
+    return get_organizations_with_active_researchers(starttime, endtime)
+
+
 def main(argv):
     parser = ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -125,21 +145,16 @@ def main(argv):
 
     args = parser.parse_args(argv[1:])
 
-    try:
-        starttime = datetime.datetime.strptime(args.startdate, "%Y-%m-%d")
-    except ValueError:
-        parser.error("Cannot parse start date")
-    try:
-        endtime = datetime.datetime.strptime(
-            args.enddate, "%Y-%m-%d"
-        ) + datetime.timedelta(hours=23, minutes=59, seconds=59)
-    except ValueError:
-        parser.error("Cannot parse end date")
-    if starttime > endtime:
-        parser.error("Start date can't be after end date")
-
     runtime = datetime.datetime.now()
-    active_organizations = get_organizations_with_active_researchers(starttime, endtime)
+    # SOFTWARE-5361: "New" means, "In the list when run for the past 30 days,
+    # but NOT in the list when run for 2020-10-01 thru 2022-09-30".
+    old_active_orgs = get_organizations_with_active_researchers__dates(
+        "2020-10-01", "2022-09-30", parser
+    )
+    active_organizations = get_organizations_with_active_researchers__dates(
+        args.startdate, args.enddate, parser
+    )
+    new_active_orgs = active_organizations - old_active_orgs
     ccstar_facilities = get_ccstar_facilities()
 
     # TODO: Project Organizations do not necessarily match Topology Facilities.
@@ -149,15 +164,20 @@ def main(argv):
         nowts = runtime.strftime("%F at %H:%M")
         dateinfo = "(Generated on {} for {} through {})".format(nowts, args.startdate, args.enddate)
         writer = csv.writer(sys.stdout, dialect="unix")
-        writer.writerow(("CC*", "Organization", dateinfo))
+        writer.writerow(("CC*", "New", "Organization", dateinfo))
         for organization in sorted(active_organizations):
-            writer.writerow(("True" if organization in ccstar_facilities else "False", organization))
+            ccstar = str(organization in ccstar_facilities)
+            new    = str(organization in new_active_orgs)
+            writer.writerow((ccstar, new, organization))
     else:
-        fmt_string = "%-6s%s"
-        print(fmt_string % ("CC*", "Organization"))
-        print(fmt_string % ("----- ", "---------"))
+        fmt_string = "%-6s%-4s%s"
+        yes_if = ("", "yes")
+        print(fmt_string % ("CC*", "New", "Organization"))
+        print(fmt_string % ("-----", "---", "---------"))
         for organization in sorted(active_organizations):
-            print(fmt_string % ("yes" if organization in ccstar_facilities else "", organization))
+            ccstar = yes_if[organization in ccstar_facilities]
+            new    = yes_if[organization in new_active_orgs]
+            print(fmt_string % (ccstar, new, organization))
 
 
 if __name__ == "__main__":
