@@ -46,7 +46,13 @@ def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
             & Q("term", ResourceType="Payload")
             & Q("term", VOName="osg")
             & (Q("term", ProbeName="condor-ap:login04.osgconnect.net") | 
-               Q("term", ProbeName="condor-ap:login05.osgconnect.net"))
+               Q("term", ProbeName="condor-ap:login05.osgconnect.net") |
+               Q("term", ProbeName="condor-ap:ap20.uc.osg-htc.org") | 
+               Q("term", ProbeName="condor-ap:ap21.uc.osg-htc.org") | 
+               Q("term", ProbeName="condor-ap:ap22.uc.osg-htc.org") | 
+               Q("term", ProbeName="condor-ap:ap23.uc.osg-htc.org") | 
+               Q("term", ProbeName="condor-ap:ap40.uw.osg-htc.org")
+            )
         ],
     )
 
