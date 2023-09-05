@@ -36,14 +36,18 @@ def calculate_users(endtime, months):
     # Round to end of the endtime month
     endtimeDate = endtimeDate.replace(day=calendar.monthrange(endtimeDate.year, endtimeDate.month)[1], hour=23, minute=59, second=59)
     starttimeDate = endtimeDate - relativedelta.relativedelta(months=months)
+    #print("Start time: {}".format(starttimeDate))
+    #print("End time: {}".format(endtimeDate))
     s = s.filter('range', **{'@timestamp': {'gte': starttimeDate, 'lte': endtimeDate}})
 
-    # Have to use the odd dirname1__keyword so that it matches exactly '/osgconnect', otherwise
-    # it can match substrings such as just osgconnect
-    s = s.query('match', dirname1__keyword='/osgconnect')
+    # Have to use the odd dirname1__keyword so that it matches exactly '/ospool', otherwise
+    # it can match substrings such as just ospool
+    # Also, remove the monitoring directory
+    q = Q('match', dirname1__keyword='/ospool') & ~Q('match', dirname2__keyword='/ospool/monitoring')
+    s = s.query(q)
     bkt = s.aggs
     bkt = bkt.bucket('timestamp', A('date_histogram', field="@timestamp", calendar_interval="1M"))
-    bkt = bkt.bucket('logical_dirname', 'terms', field='logical_dirname.keyword', size=1000)
+    bkt = bkt.bucket('logical_dirname', 'terms', field='logical_dirname.keyword', size=10000)
     #print(s.to_dict())
     response = s.execute()
     #print(response.aggregations.to_dict())
@@ -61,11 +65,13 @@ def calculate_users(endtime, months):
 
     # For the most recent month, find users that have not be in the previous months
     lastMonth = monthsSorted[len(monthsSorted)-1]
+    #print("Last month: {}".format(lastMonth))
     #print("Active users in last month: {}".format(len(months[lastMonth])))
     activeUsers = len(monthSets[lastMonth])
 
     # Calculate the new users by setting the most recent
     # month and subtracting the previous months
+    #print(monthSets)
     newUsers = monthSets[lastMonth]
     for month in monthsSorted[:-1]:
         newUsers -= monthSets[month]
