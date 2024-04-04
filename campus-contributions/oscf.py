@@ -5,12 +5,12 @@ from __future__ import print_function
 import os
 import sys
 import datetime
-import elasticsearch
-from   elasticsearch_dsl import Search, A, Q
+import opensearchpy
+from opensearchpy import Search, A, Q
 
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
-es = elasticsearch.Elasticsearch(
+es = opensearchpy.OpenSearch(
                 [gracc_url], timeout=300, use_ssl=True, verify_certs=True)
 
 jobs_raw_index = 'gracc.osg.raw-*'

@@ -12,8 +12,8 @@ import time
 import datetime
 import collections
 import argparse
-import elasticsearch
-from elasticsearch_dsl import Search, A, Q
+import opensearchpy
+from opensearchpy import Search, A, Q
 from dateutil import parser, relativedelta
 
 
@@ -23,7 +23,7 @@ def calculate_users(endtime, months):
 
     gracc_url = 'https://gracc.opensciencegrid.org/q'
 
-    es = elasticsearch.Elasticsearch(
+    es = opensearchpy.OpenSearch(
                     [gracc_url], timeout=300, use_ssl=True, verify_certs=True)
 
     osdf_index = 'xrd-stash*'

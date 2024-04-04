@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, A, Q
+import opensearchpy
+from opensearchpy import Search, A, Q
 import datetime
 import pandas as pd
 import dateutil.parser as parser
@@ -28,7 +28,7 @@ def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
 
     # 6 months back
     starttime = starttime - datetime.timedelta(days=15)
-    es = Elasticsearch(
+    es = opensearchpy.OpenSearch(
         [GRACC],
         timeout=300,
         use_ssl=True,
