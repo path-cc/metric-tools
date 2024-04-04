@@ -7,7 +7,7 @@ See [SOFTWARE-4396](https://opensciencegrid.atlassian.net/browse/SOFTWARE-4396) 
 
 ## Requirements/Installation
 
-Requires Python 3 with the `elasticsearch` and `elasticsearch_dsl` modules.
+Requires Python 3 with the `opensearch` module.
 
 Installation (assuming Python 3 is already installed):
 ```

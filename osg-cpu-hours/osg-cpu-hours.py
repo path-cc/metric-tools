@@ -11,14 +11,14 @@ import json
 import time
 import datetime
 import collections
-import elasticsearch
-from elasticsearch_dsl import Search, A, Q
+import opensearchpy
+from opensearchpy import Search, A, Q
 
 import cc_star_fqdns
 
 gracc_url = 'https://gracc.opensciencegrid.org/q'
 
-es = elasticsearch.Elasticsearch(
+es = opensearchpy.OpenSearch(
                 [gracc_url], timeout=300, use_ssl=True, verify_certs=True)
 
 jobs_raw_index = 'gracc.osg.raw-*'

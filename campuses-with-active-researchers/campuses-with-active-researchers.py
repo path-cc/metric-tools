@@ -9,8 +9,8 @@ the definition of 'active researcher'.
 
 from argparse import ArgumentParser
 import csv
-from elasticsearch import Elasticsearch
-from elasticsearch_dsl import Search, A, Q
+import opensearchpy
+from opensearchpy import Search, A, Q
 import datetime
 import sys
 from typing import List, Optional, Set
@@ -82,7 +82,7 @@ def get_organizations_with_active_researchers(
     The field OIM_Organization is taken from the Organizations in the projects YAML files.
 
     """
-    es = Elasticsearch(
+    es = opensearchpy.OpenSearch(
         [GRACC],
         timeout=300,
         use_ssl=True,
