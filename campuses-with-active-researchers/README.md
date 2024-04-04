@@ -7,7 +7,7 @@ See [SOFTWARE-4396](https://opensciencegrid.atlassian.net/browse/SOFTWARE-4396) 
 
 ## Requirements/Installation
 
-Requires Python 3 with the `opensearch` module.
+Requires Python 3 with the `opensearch-py` module.
 
 Installation (assuming Python 3 is already installed):
 ```
