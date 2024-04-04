@@ -136,7 +136,7 @@ def generateRawQuery(user, starttime, endtime):
     """
     Generate the raw query to get all usage for a user between starttime and endtime.
     """
-    es = Elasticsearch(
+    es = opensearchpy.OpenSearch(
         [GRACC],
         timeout=300,
         use_ssl=True,
