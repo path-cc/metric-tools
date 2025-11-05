@@ -29,6 +29,8 @@ _xml_url = "%s?%s" % (_rgsummary_url, '&'.join(map('='.join, _active_params)))
 _osdf_service_types = [
     "XRootD cache server",
     "XRootD origin server",
+    "Pelican cache",
+    "Pelican origin",
 ]
 
 
