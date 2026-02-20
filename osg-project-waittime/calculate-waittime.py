@@ -51,7 +51,10 @@ def getUsersPerDay(starttime: datetime.datetime, endtime: datetime.datetime):
                Q("term", ProbeName="condor-ap:ap21.uc.osg-htc.org") | 
                Q("term", ProbeName="condor-ap:ap22.uc.osg-htc.org") | 
                Q("term", ProbeName="condor-ap:ap23.uc.osg-htc.org") | 
-               Q("term", ProbeName="condor-ap:ap40.uw.osg-htc.org")
+               Q("term", ProbeName="condor-ap:ap40.uw.osg-htc.org") |
+               Q("term", ProbeName="condor-ap:ap41.uw.osg-htc.org") |
+               Q("term", ProbeName="condor-ap:ap42.uw.osg-htc.org") |
+               Q("term", ProbeName="condor-ap:ap43.uw.osg-htc.org")
             )
         ],
     )
