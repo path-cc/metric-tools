@@ -1,3 +1,4 @@
+setuptools
 numpy<2
 opensearch-py
 pandas==1.5.3
