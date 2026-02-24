@@ -114,7 +114,7 @@ def getIdleUsers(perDay: pd.DataFrame):
         tempUsage = 0
         days = []
         # For each day in the search period
-        for day, value in row.iteritems():
+        for day, value in row.items():
             if value == 0:
                 numZeros += 1
             elif numZeros > 14:
