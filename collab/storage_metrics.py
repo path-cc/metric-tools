@@ -7,9 +7,10 @@ then locates the Pelican Server binary inside each such container.
 """
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # Types
@@ -20,6 +21,7 @@ from typing import Optional
 class PelicanOriginInfo:
     """Result returned for each pod that hosts a Pelican Origin container."""
 
+    namespace: str
     pod_name: str
     container_name: str
     binary_path: str
@@ -47,6 +49,21 @@ PELICAN_BINARY_CANDIDATES: tuple[str, ...] = (
     "pelican",
 )
 
+# The script to run inside the pod to get usage info
+INNER_SCRIPT = "inner.py"
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+class Error(Exception):
+    """Base exception class"""
+
+
+class InnerScriptError(Error):
+    """Something went wrong with the inner script executed inside the container"""
+
 
 # ---------------------------------------------------------------------------
 # Low-level helpers
@@ -62,6 +79,16 @@ def _run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
         text=True,
         check=check,
     )
+
+
+def _current_namespace() -> Optional[str]:
+    """Return the current Kubernetes namespace"""
+    ret = _run(["kubectl", "config", "get-contexts"])
+    for line in ret.stdout.splitline():
+        if line.startswith("*"):
+            namespace = re.split(r"\s+", line)[4]
+            return namespace
+    return None
 
 
 def _is_origin_container(container: dict) -> bool:
@@ -138,8 +165,6 @@ def examine_pod(
 
     Parameters
     ----------
-    namespace:
-        The Kubernetes namespace the pod lives in.
     pod:
         A dict representing the pod's JSON manifest (e.g. from
         ``kubectl get pod <n> -o json``).
@@ -164,6 +189,7 @@ def examine_pod(
             continue
 
         return PelicanOriginInfo(
+            namespace=namespace,
             pod_name=pod_name,
             container_name=container_name,
             binary_path=binary_path,
