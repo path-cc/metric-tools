@@ -535,7 +535,19 @@ def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
     return proc.wait()
 
 
-def main(argv=None) -> int:
+def _parse_args(
+    argv,
+) -> tuple[argparse.Namespace, list[tuple[str, configparser.SectionProxy]]]:
+    """
+    Parse CLI arguments, validate them, read config.ini, and build the cluster list.
+
+    Returns
+    -------
+    args:
+        Parsed argument namespace.
+    clusters:
+        Ordered list of ``(cluster_name, config_section)`` pairs to process.
+    """
     parser = argparse.ArgumentParser(
         description="Collect Pelican Origin storage metrics from Kubernetes clusters."
     )
@@ -592,6 +604,96 @@ def main(argv=None) -> int:
     if run_tempest and "tempest" in cfg:
         clusters.append(("tempest", cfg["tempest"]))
 
+    return args, clusters
+
+
+def _process_namespace(
+    cluster_name: str,
+    context: str,
+    namespace: str,
+    fh,
+    args: argparse.Namespace,
+    cluster_count: int,
+    cluster_skipped: int,
+) -> tuple[int, int]:
+    """
+    Process all origins in one namespace: check access, list pods, apply filters,
+    collect exports, and append results to *fh*.
+
+    Parameters
+    ----------
+    cluster_name:
+        Human-readable cluster name (used in error messages).
+    context:
+        kubectl context for this cluster.
+    namespace:
+        Kubernetes namespace to search.
+    fh:
+        Open file handle to append JSON lines to.
+    args:
+        Parsed CLI arguments (uses ``args.n``, ``args.s``, ``args.pod``).
+    cluster_count:
+        Number of origins already processed in this cluster run.
+    cluster_skipped:
+        Number of origins already skipped (for ``-s`` resumption).
+
+    Returns
+    -------
+    tuple[int, int]
+        Updated ``(cluster_count, cluster_skipped)``.
+    """
+    if not _check_namespace_access(cluster_name, context, namespace):
+        return cluster_count, cluster_skipped
+
+    try:
+        origins = list(find_pelican_origin_pods(context=context, namespace=namespace))
+    except Exception as err:
+        print(
+            f"ERROR: failed to list pods in cluster={cluster_name!r} "
+            f"namespace={namespace!r}: {err}",
+            file=sys.stderr,
+        )
+        return cluster_count, cluster_skipped
+
+    for origin in origins:
+        if args.n is not None and cluster_count >= args.n:
+            break
+        if args.pod and not any(origin.pod_name.startswith(p) for p in args.pod):
+            continue
+        if cluster_skipped < args.s:
+            cluster_skipped += 1
+            continue
+
+        exports = None
+        sitename = None
+        ok = True
+        try:
+            _printflush(f"{origin.pod_name}: Getting exports...")
+            sitename, exports = get_exports_for_pod(origin)
+        except Exception as err:
+            print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
+            ok = False
+
+        _printflush(f"{origin.pod_name} {'ok' if ok else 'FAIL'}")
+        fh.write(
+            json.dumps(
+                {
+                    "origin": dataclasses.asdict(origin),
+                    "exports": exports,
+                    "sitename": sitename,
+                }
+            )
+            + "\n"
+        )
+        fh.flush()
+        cluster_count += 1
+
+    return cluster_count, cluster_skipped
+
+
+def main(argv=None) -> int:
+    args, clusters = _parse_args(argv)
+
     for cluster_name, section in clusters:
         context = section["context"]
         namespaces = section["namespaces"].split()
@@ -599,61 +701,19 @@ def main(argv=None) -> int:
         cluster_count = 0
         cluster_skipped = 0
 
-        for namespace in namespaces:
-            if args.n is not None and cluster_count >= args.n:
-                break
-            if not _check_namespace_access(cluster_name, context, namespace):
-                continue
-
-            try:
-                origins = list(
-                    find_pelican_origin_pods(context=context, namespace=namespace)
+        with open(out_file, "a") as fh:
+            for namespace in namespaces:
+                if args.n is not None and cluster_count >= args.n:
+                    break
+                cluster_count, cluster_skipped = _process_namespace(
+                    cluster_name,
+                    context,
+                    namespace,
+                    fh,
+                    args,
+                    cluster_count,
+                    cluster_skipped,
                 )
-            except Exception as err:
-                print(
-                    f"ERROR: failed to list pods in cluster={cluster_name!r} "
-                    f"namespace={namespace!r}: {err}",
-                    file=sys.stderr,
-                )
-                continue
-
-            with open(out_file, "a") as fh:
-                for origin in origins:
-                    if args.n is not None and cluster_count >= args.n:
-                        break
-                    if args.pod and not any(
-                        origin.pod_name.startswith(p) for p in args.pod
-                    ):
-                        continue
-                    if cluster_skipped < args.s:
-                        cluster_skipped += 1
-                        continue
-                    exports = None
-                    sitename = None
-                    ok = True
-                    try:
-                        _printflush(f"{origin.pod_name}: Getting exports...")
-                        sitename, exports = get_exports_for_pod(origin)
-                    except Exception as err:
-                        print(
-                            f"ERROR: {origin.pod_name}: {err}",
-                            file=sys.stderr,
-                        )
-                        ok = False
-
-                    _printflush(f"{origin.pod_name} {'ok' if ok else 'FAIL'}")
-                    fh.write(
-                        json.dumps(
-                            {
-                                "origin": dataclasses.asdict(origin),
-                                "exports": exports,
-                                "sitename": sitename,
-                            }
-                        )
-                        + "\n"
-                    )
-                    fh.flush()
-                    cluster_count += 1
 
     return 0
 
