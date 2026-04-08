@@ -18,6 +18,7 @@ class Export:
     federation_prefix: str
     public: bool
     size: Optional[int] = None
+    error: Optional[str] = None
 
 
 def get_binary_name() -> str:
@@ -204,6 +205,7 @@ def main(argv=()):
             print(
                 f"{export.storage_prefix}: Error getting size: {err}", file=sys.stderr
             )
+            export.error = str(err)
             continue
 
     result['exports'] = [dataclasses.asdict(it) for it in exports]
