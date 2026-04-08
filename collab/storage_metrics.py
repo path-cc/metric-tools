@@ -9,6 +9,7 @@ then locates the Pelican Server binary inside each such container.
 import json
 import re
 import subprocess
+from collections.abc import Generator
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
@@ -18,36 +19,30 @@ from typing import Optional, Sequence
 
 
 @dataclass
-class PelicanOriginInfo:
-    """Result returned for each pod that hosts a Pelican Origin container."""
+class Origin:
+    """Information about how to exec into an origin container."""
 
     namespace: str
     pod_name: str
     container_name: str
-    binary_path: str
 
 
 @dataclass
-class OriginExportDirs:
-    """Storage directories exported by a Pelican Origin, split by access type."""
+class Export:
+    """A storage prefix/federation prefix combo, plus whether it's public or not."""
 
-    public: list[str]
-    authenticated: list[str]
+    storage_prefix: str
+    federation_prefix: str
+    public: bool
+    size: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-#: Image name substrings that identify a Pelican Origin container.
+# Image name substrings that identify a Pelican Origin container.
 ORIGIN_IMAGE_NAMES: tuple[str, ...] = ("osdf-origin", "origin")
-
-#: Candidate binary names in preference order.
-PELICAN_BINARY_CANDIDATES: tuple[str, ...] = (
-    "pelican-server",
-    "osdf-server",
-    "pelican",
-)
 
 # The script to run inside the pod to get usage info
 INNER_SCRIPT = "inner.py"
@@ -56,6 +51,7 @@ INNER_SCRIPT = "inner.py"
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
+
 
 class Error(Exception):
     """Base exception class"""
@@ -81,6 +77,25 @@ def _run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
     )
 
 
+def _run_in_origin(
+    origin: Origin,
+    args: list[str],
+    *,
+    check: bool = True,
+) -> subprocess.CompletedProcess:
+
+    cmd = [
+        "kubectl",
+        "exec",
+        "--namespace",
+        origin.namespace,
+        "--container",
+        origin.container_name,
+        origin.pod_name,
+    ]
+    return _run(cmd + ["--"] + args, check=check)
+
+
 def _current_namespace() -> Optional[str]:
     """Return the current Kubernetes namespace"""
     ret = _run(["kubectl", "config", "get-contexts"])
@@ -99,50 +114,11 @@ def _is_origin_container(container: dict) -> bool:
     full_image: str = container.get("image", "")
     # This assumes that image names always have the registry
     parts = re.split(r"[:@/]", full_image)
-    image = parts[2]
-    return image in ORIGIN_IMAGE_NAMES
-
-
-def _find_binary_in_container(
-    namespace: str,
-    pod_name: str,
-    container_name: str,
-) -> Optional[str]:
-    """
-    Use ``kubectl exec`` to search for the Pelican Server binary inside
-    *container_name* of *pod_name*.
-
-    Candidates are tried in preference order; the first one found via
-    ``command -v`` (POSIX built-in, available without any extra packages) is
-    returned.  Returns *None* if none of the candidates are found or if the
-    exec fails entirely.
-    """
-    for binary in PELICAN_BINARY_CANDIDATES:
-        try:
-            result = _run(
-                [
-                    "kubectl",
-                    "exec",
-                    pod_name,
-                    "--namespace",
-                    namespace,
-                    "--container",
-                    container_name,
-                    "--",
-                    "sh",
-                    "-c",
-                    f"command -v {binary}",
-                ],
-                check=True,
-            )
-            path = result.stdout.strip()
-            if path:
-                return path
-        except subprocess.CalledProcessError:
-            # Binary not found in this container or exec failed — try the next.
-            continue
-
-    return None
+    try:
+        image = parts[2]
+        return image in ORIGIN_IMAGE_NAMES
+    except IndexError:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +129,13 @@ def _find_binary_in_container(
 def examine_pod(
     namespace: str,
     pod: dict,
-) -> Optional[PelicanOriginInfo]:
+) -> Optional[Origin]:
     """
     Examine a single pod manifest (as returned by the Kubernetes API / kubectl)
     and determine whether it hosts a Pelican Origin container.
 
     If it does, locate the Pelican Server binary inside that container and
-    return a :class:`PelicanOriginInfo`.  Returns *None* if the pod does not
+    return a :class:`Origin`.  Returns *None* if the pod does not
     contain a recognised Pelican Origin container or if the binary cannot be
     found.
 
@@ -171,34 +147,30 @@ def examine_pod(
 
     Returns
     -------
-    PelicanOriginInfo | None
+    Origin | None
     """
-    pod_name: str = pod["metadata"]["name"]
-    containers: list[dict] = pod.get("spec", {}).get("containers", [])
+    try:
+        pod_name: str = pod["metadata"]["name"]
+        containers: list[dict] = pod["spec"]["containers"]
+    except KeyError:
+        return None
 
     for container in containers:
         if not _is_origin_container(container):
             continue
 
         container_name: str = container["name"]
-        binary_path = _find_binary_in_container(namespace, pod_name, container_name)
 
-        if binary_path is None:
-            # Origin container found but no known binary — skip rather than
-            # returning incomplete information.
-            continue
-
-        return PelicanOriginInfo(
+        return Origin(
             namespace=namespace,
             pod_name=pod_name,
             container_name=container_name,
-            binary_path=binary_path,
         )
 
     return None
 
 
-def find_pelican_origin_pods(namespace: str) -> list[PelicanOriginInfo]:
+def find_pelican_origin_pods(namespace: str) -> Generator[Origin]:
     """
     List all pods in *namespace* and return information about every pod that
     contains a Pelican Origin container with a discoverable Pelican Server
@@ -209,10 +181,11 @@ def find_pelican_origin_pods(namespace: str) -> list[PelicanOriginInfo]:
     namespace:
         The Kubernetes namespace to search (e.g. ``"pelican"``).
 
-    Returns
-    -------
-    list[PelicanOriginInfo]
-        One entry per qualifying pod.  May be empty.
+    Yields
+    ------
+    Origin
+        The info about one pod: the namespace, name, container name, and path
+        to pelican-server binary inside the container.
 
     Raises
     ------
@@ -237,18 +210,15 @@ def find_pelican_origin_pods(namespace: str) -> list[PelicanOriginInfo]:
     pod_list: dict = json.loads(result.stdout)
     pods: list[dict] = pod_list.get("items", [])
 
-    found: list[PelicanOriginInfo] = []
     for pod in pods:
         info = examine_pod(namespace, pod)
         if info is not None:
-            found.append(info)
-
-    return found
+            yield info
 
 
 def get_origin_export_dirs(
-    origin: PelicanOriginInfo,
-) -> OriginExportDirs:
+    origin: Origin,
+) -> list[Export]:
     """
     Run ``<binary> config dump --json`` inside the Origin container and parse
     the exported storage directories, splitting them by access type.
@@ -275,14 +245,13 @@ def get_origin_export_dirs(
     Parameters
     ----------
     origin:
-        A `PelicanOriginInfo` identifying the namespace, pod, container,
+        A `Origin` identifying the namespace, pod, container,
         and binary to use.
 
     Returns
     -------
-    OriginExportDirs
-        Two lists of ``storageprefix`` strings: one for public namespaces and
-        one for authenticated namespaces.
+    list[Export]
+        A list of each export.
 
     Raises
     ------
@@ -291,41 +260,41 @@ def get_origin_export_dirs(
     json.JSONDecodeError
         If the binary does not return valid JSON.
     """
-    result = _run(
+    result = _run_in_origin(
+        origin,
         [
-            "kubectl",
-            "exec",
-            origin.pod_name,
-            "--namespace",
-            origin.namespace,
-            "--container",
-            origin.container_name,
-            "--",
-            origin.binary_path,
-            "config",
-            "dump",
-            "--json",
-        ]
+            "sh",
+            "-c",
+            "bin=$(command -v pelican-server 2>/dev/null || command -v osdf-server 2>/dev/null || command -v pelican 2>/dev/null); "
+            "$bin config dump --json",
+        ],
     )
 
     config: dict = json.loads(result.stdout)
     origin_cfg: dict = config.get("Origin") or {}
 
-    public: list[str] = []
-    authenticated: list[str] = []
+    exports: list[Export] = []
 
     # ------------------------------------------------------------------
     # New-style: Origin.Exports
     # Each entry carries its own capabilities list.
     # ------------------------------------------------------------------
     for export in origin_cfg.get("Exports") or []:
-        capabilities: list[str] = export.get("capabilities") or []
-        storage_prefix: str = export["storageprefix"]
+        try:
+            capabilities: list[str] = export["capabilities"]
+            storage_prefix: str = export["storageprefix"]
+            federation_prefix: str = export["federationprefix"]
+        except KeyError:
+            # Malformed export
+            continue
 
-        if "PublicReads" in capabilities:
-            public.append(storage_prefix)
-        else:
-            authenticated.append(storage_prefix)
+        exports.append(
+            Export(
+                storage_prefix=storage_prefix,
+                federation_prefix=federation_prefix,
+                public=("PublicReads" in capabilities),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Old-style: Origin.ExportVolumes
@@ -339,19 +308,22 @@ def get_origin_export_dirs(
         if volume.count(":") != 2:
             # Malformed volume
             continue
-        storage_path, _, federation_path = volume.partition(":")
-        if not storage_path.startswith("/") or not federation_path.startswith("/"):
+        storage_prefix, _, federation_prefix = volume.partition(":")
+        if not storage_prefix.startswith("/") or not federation_prefix.startswith("/"):
             continue
 
-        if volumes_are_public:
-            public.append(storage_path)
-        else:
-            authenticated.append(storage_path)
+        exports.append(
+            Export(
+                storage_prefix=storage_prefix,
+                federation_prefix=federation_prefix,
+                public=volumes_are_public,
+            )
+        )
 
-    return OriginExportDirs(public=public, authenticated=authenticated)
+    return exports
 
 
-def copy_script_to_origin(origin: PelicanOriginInfo):
+def copy_inner_script_to_origin(origin: Origin):
     """
     Copy the inner script to the temp directory in *origin*
     so it can be run later.
@@ -368,7 +340,7 @@ def copy_script_to_origin(origin: PelicanOriginInfo):
     )
 
 
-def run_inner_script(origin: PelicanOriginInfo, *args: str) -> dict:
+def run_inner_script(origin: Origin, *args: str) -> dict:
     """
     Runs the inner script in the pod on the storage path, returning the result.
     Script must already have been copied.
@@ -390,20 +362,7 @@ def run_inner_script(origin: PelicanOriginInfo, *args: str) -> dict:
     InnerScriptError
         If something goes wrong with the inner script.
     """
-    ret = _run(
-        [
-            "kubectl",
-            "exec",
-            "-n",
-            origin.namespace,
-            "-c",
-            origin.container_name,
-            origin.pod_name,
-            "--",
-            f"/tmp/{INNER_SCRIPT}",
-        ] + list(args),
-        check=False,
-    )
+    ret = _run_in_origin(origin, [f"/tmp/{INNER_SCRIPT}"] + list(args), check=False)
     try:
         results = json.loads(ret.stdout)
     except json.JSONDecodeError as err:
@@ -416,7 +375,17 @@ def run_inner_script(origin: PelicanOriginInfo, *args: str) -> dict:
     return results
 
 
-def interactive_exec(origin: PelicanOriginInfo, cmd: Sequence[str] = ("bash",)) -> int:
+def get_exports_for_pod(origin: Origin) -> list[Export]:
+    copy_inner_script_to_origin(origin)
+    exports = get_origin_export_dirs(origin)
+    for export in exports:
+        result = run_inner_script(origin, export.storage_prefix)
+        if "bytes" in result:
+            export.size = result["bytes"]
+    return exports
+
+
+def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
     """
     Debugging function: interactively exec into an origin to take a look around.
 
@@ -439,9 +408,9 @@ def interactive_exec(origin: PelicanOriginInfo, cmd: Sequence[str] = ("bash",)) 
         [
             "kubectl",
             "exec",
-            "-n",
+            "--namespace",
             origin.namespace,
-            "-c",
+            "--container",
             origin.container_name,
             "-it",
             origin.pod_name,
