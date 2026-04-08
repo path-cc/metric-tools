@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 pelican_origin_finder.py
 
@@ -6,9 +7,13 @@ Finds pods containing Pelican Origin containers in a given Kubernetes namespace,
 then locates the Pelican Server binary inside each such container.
 """
 
+import argparse
+import configparser
+import dataclasses
 import json
 import re
 import subprocess
+import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from typing import Optional, Sequence
@@ -99,6 +104,48 @@ def _run_in_origin(
     return _run(cmd + ["--"] + args, check=check)
 
 
+def _check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
+    """
+    Return True if we have permission to get pods and exec into pods in *namespace*.
+    Prints an error to stderr and returns False if either check fails.
+    """
+    checks = [
+        [
+            "kubectl",
+            "--context",
+            context,
+            "auth",
+            "can-i",
+            "get",
+            "pods",
+            "--namespace",
+            namespace,
+        ],
+        [
+            "kubectl",
+            "--context",
+            context,
+            "auth",
+            "can-i",
+            "create",
+            "pods/exec",
+            "--namespace",
+            namespace,
+        ],
+    ]
+    for cmd in checks:
+        ret = _run(cmd, check=False)
+        if ret.returncode != 0 or ret.stdout.strip() != "yes":
+            print(
+                f"ERROR: insufficient permissions in cluster={cluster!r} "
+                f"namespace={namespace!r}: {' '.join(cmd[5:])} -> "
+                f"{ret.stdout.strip() or ret.stderr.strip()}",
+                file=sys.stderr,
+            )
+            return False
+    return True
+
+
 def _current_context() -> str:
     """Return the current Kubernetes context, or raise Error if it cannot be determined."""
     ret = _run(["kubectl", "config", "current-context"])
@@ -140,6 +187,13 @@ def _is_origin_container(container: dict) -> bool:
         return image in ORIGIN_IMAGE_NAMES
     except IndexError:
         return False
+
+
+def _printflush(*args, **kwargs):
+    """Print and flush immediately."""
+    file = kwargs.pop("file", sys.stdout)
+    print(*args, **kwargs, file=file)
+    file.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -257,9 +311,17 @@ def find_pelican_origin_pods(
     pods: list[dict] = pod_list.get("items", [])
 
     for pod in pods:
+        pod_name = pod.get("metadata", {}).get("name", "<unknown>")
         info = examine_pod(pod, context, namespace)
         if info is not None:
-            yield info
+            phase = pod.get("status", {}).get("phase", "<unknown>")
+            if phase == "Running":
+                yield info
+            else:
+                _printflush(
+                    f"Origin {pod_name!r}: not Running (phase={phase!r})",
+                    file=sys.stderr,
+                )
 
 
 def get_origin_export_dirs(
@@ -426,7 +488,7 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
     return results
 
 
-def get_exports_for_pod(origin: Origin) -> tuple[str, list[Export]]:
+def get_exports_for_pod(origin: Origin) -> tuple[str, list[dict]]:
     copy_inner_script_to_origin(origin)
     result = run_inner_script(origin, copy=False)
     if result['status'] == "ok":
@@ -471,3 +533,130 @@ def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
         + list(cmd)
     )
     return proc.wait()
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Collect Pelican Origin storage metrics from Kubernetes clusters."
+    )
+    parser.add_argument(
+        "--nautilus", action="store_true", help="Only process the nautilus cluster"
+    )
+    parser.add_argument(
+        "--tiger", action="store_true", help="Only process the tiger cluster"
+    )
+    parser.add_argument(
+        "--tempest", action="store_true", help="Only process the tempest cluster"
+    )
+    parser.add_argument(
+        "-n",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Stop after processing N origins per cluster",
+    )
+    parser.add_argument(
+        "-s",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Skip the first N origins per cluster (to resume a previous run)",
+    )
+    parser.add_argument(
+        "-p",
+        "--pod",
+        action="append",
+        default=[],
+        metavar="PREFIX",
+        help="Only process pods whose name starts with PREFIX (may be given multiple times)",
+    )
+    args = parser.parse_args(argv)
+
+    if args.s and args.pod:
+        parser.error("-s and --pod are mutually exclusive")
+
+    # If no cluster flag is set, process all clusters
+    any_cluster = args.nautilus or args.tiger or args.tempest
+    run_nautilus = args.nautilus or not any_cluster
+    run_tiger = args.tiger or not any_cluster
+    run_tempest = args.tempest or not any_cluster
+
+    cfg = configparser.ConfigParser()
+    cfg.read("config.ini")
+
+    clusters = []
+    if run_nautilus and "nautilus" in cfg:
+        clusters.append(("nautilus", cfg["nautilus"]))
+    if run_tiger and "tiger" in cfg:
+        clusters.append(("tiger", cfg["tiger"]))
+    if run_tempest and "tempest" in cfg:
+        clusters.append(("tempest", cfg["tempest"]))
+
+    for cluster_name, section in clusters:
+        context = section["context"]
+        namespaces = section["namespaces"].split()
+        out_file = section["file"]
+        cluster_count = 0
+        cluster_skipped = 0
+
+        for namespace in namespaces:
+            if args.n is not None and cluster_count >= args.n:
+                break
+            if not _check_namespace_access(cluster_name, context, namespace):
+                continue
+
+            try:
+                origins = list(
+                    find_pelican_origin_pods(context=context, namespace=namespace)
+                )
+            except Exception as err:
+                print(
+                    f"ERROR: failed to list pods in cluster={cluster_name!r} "
+                    f"namespace={namespace!r}: {err}",
+                    file=sys.stderr,
+                )
+                continue
+
+            with open(out_file, "a") as fh:
+                for origin in origins:
+                    if args.n is not None and cluster_count >= args.n:
+                        break
+                    if args.pod and not any(
+                        origin.pod_name.startswith(p) for p in args.pod
+                    ):
+                        continue
+                    if cluster_skipped < args.s:
+                        cluster_skipped += 1
+                        continue
+                    exports = None
+                    sitename = None
+                    ok = True
+                    try:
+                        _printflush(f"{origin.pod_name}: Getting exports...")
+                        sitename, exports = get_exports_for_pod(origin)
+                    except Exception as err:
+                        print(
+                            f"ERROR: {origin.pod_name}: {err}",
+                            file=sys.stderr,
+                        )
+                        ok = False
+
+                    _printflush(f"{origin.pod_name} {'ok' if ok else 'FAIL'}")
+                    fh.write(
+                        json.dumps(
+                            {
+                                "origin": dataclasses.asdict(origin),
+                                "exports": exports,
+                                "sitename": sitename,
+                            }
+                        )
+                        + "\n"
+                    )
+                    fh.flush()
+                    cluster_count += 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

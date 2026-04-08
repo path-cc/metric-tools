@@ -33,7 +33,7 @@ def get_binary_name() -> str:
 
 def get_config() -> dict:
     """
-    Run ``<pelican> config dump --json`` parse the output.
+    Run ``<pelican> config dump -o json`` parse the output.
 
     Raises
     ------
@@ -49,7 +49,8 @@ def get_config() -> dict:
             get_binary_name(),
             "config",
             "dump",
-            "--json",
+            "-o",
+            "json",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -182,6 +183,11 @@ def main(argv=()):
 
     try:
         config = get_config()
+    except subprocess.CalledProcessError as err:
+        result['status'] = "error"
+        result['error'] = f"config command failed: {err.stderr.strip()}"
+        json.dump(result, sys.stdout)
+        return 1
     except Exception as err:
         result['status'] = "error"
         result['error'] = f"error getting config: {err}"
