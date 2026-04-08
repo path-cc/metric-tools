@@ -118,7 +118,7 @@ def get_export_dirs(config: dict) -> list[Export]:
     volumes_are_public: bool = bool(origin_cfg.get("EnablePublicReads"))
 
     for volume in export_volumes:
-        if volume.count(":") != 2:
+        if volume.count(":") != 1:
             # Malformed volume
             continue
         storage_prefix, _, federation_prefix = volume.partition(":")

@@ -99,7 +99,7 @@ def _run_in_origin(
 def _current_namespace() -> Optional[str]:
     """Return the current Kubernetes namespace"""
     ret = _run(["kubectl", "config", "get-contexts"])
-    for line in ret.stdout.splitline():
+    for line in ret.stdout.splitlines():
         if line.startswith("*"):
             namespace = re.split(r"\s+", line)[4]
             return namespace
@@ -305,7 +305,7 @@ def get_origin_export_dirs(
     volumes_are_public: bool = bool(origin_cfg.get("EnablePublicReads"))
 
     for volume in export_volumes:
-        if volume.count(":") != 2:
+        if volume.count(":") != 1:
             # Malformed volume
             continue
         storage_prefix, _, federation_prefix = volume.partition(":")
