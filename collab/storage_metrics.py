@@ -340,10 +340,9 @@ def copy_inner_script_to_origin(origin: Origin):
     )
 
 
-def run_inner_script(origin: Origin, *args: str) -> dict:
+def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
     """
     Runs the inner script in the pod on the storage path, returning the result.
-    Script must already have been copied.
 
     Parameters
     ----------
@@ -351,6 +350,8 @@ def run_inner_script(origin: Origin, *args: str) -> dict:
         The origin to run the script inside.
     args:
         Arguments to the script.
+    copy:
+        True if we should copy the inner script first.
 
     Returns
     -------
@@ -362,6 +363,8 @@ def run_inner_script(origin: Origin, *args: str) -> dict:
     InnerScriptError
         If something goes wrong with the inner script.
     """
+    if copy:
+        copy_inner_script_to_origin(origin)
     ret = _run_in_origin(origin, [f"/tmp/{INNER_SCRIPT}"] + list(args), check=False)
     try:
         results = json.loads(ret.stdout)
@@ -375,14 +378,14 @@ def run_inner_script(origin: Origin, *args: str) -> dict:
     return results
 
 
-def get_exports_for_pod(origin: Origin) -> list[Export]:
+def get_exports_for_pod(origin: Origin) -> tuple[str, list[Export]]:
     copy_inner_script_to_origin(origin)
-    exports = get_origin_export_dirs(origin)
-    for export in exports:
-        result = run_inner_script(origin, export.storage_prefix)
-        if "bytes" in result:
-            export.size = result["bytes"]
-    return exports
+    result = run_inner_script(origin, copy=False)
+    if result['status'] == "ok":
+        return result['sitename'], result['exports']
+    else:
+        raise InnerScriptError(f"Inner script returned error: {result['error']}")
+
 
 
 def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
