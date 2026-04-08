@@ -25,6 +25,7 @@ class Origin:
     namespace: str
     pod_name: str
     container_name: str
+    context: str
 
 
 @dataclass
@@ -86,6 +87,8 @@ def _run_in_origin(
 
     cmd = [
         "kubectl",
+        "--context",
+        origin.context,
         "exec",
         "--namespace",
         origin.namespace,
@@ -96,14 +99,32 @@ def _run_in_origin(
     return _run(cmd + ["--"] + args, check=check)
 
 
-def _current_namespace() -> Optional[str]:
-    """Return the current Kubernetes namespace"""
-    ret = _run(["kubectl", "config", "get-contexts"])
+def _current_context() -> str:
+    """Return the current Kubernetes context, or raise Error if it cannot be determined."""
+    ret = _run(["kubectl", "config", "current-context"])
+    context = ret.stdout.strip()
+    if not context:
+        raise Error("Could not determine current Kubernetes context")
+    return context
+
+
+def _namespace_for_context(context: Optional[str] = None) -> str:
+    """
+    Return the namespace configured for *context*, or raise Error if it cannot
+    be determined.  If *context* is not given, uses the current context.
+    """
+    if context is None:
+        context = _current_context()
+    ret = _run(["kubectl", "config", "get-contexts", "--no-headers", context])
     for line in ret.stdout.splitlines():
-        if line.startswith("*"):
-            namespace = re.split(r"\s+", line)[4]
-            return namespace
-    return None
+        parts = re.split(r"\s+", line.strip())
+        # Strip leading '*' marker for the active context
+        if parts and parts[0] == "*":
+            parts = parts[1:]
+        # Columns: NAME CLUSTER AUTHINFO [NAMESPACE]
+        if len(parts) >= 4:
+            return parts[3]
+    raise Error(f"Could not determine namespace for context {context!r}")
 
 
 def _is_origin_container(container: dict) -> bool:
@@ -127,28 +148,37 @@ def _is_origin_container(container: dict) -> bool:
 
 
 def examine_pod(
-    namespace: str,
     pod: dict,
+    context: Optional[str] = None,
+    namespace: Optional[str] = None,
 ) -> Optional[Origin]:
     """
     Examine a single pod manifest (as returned by the Kubernetes API / kubectl)
     and determine whether it hosts a Pelican Origin container.
 
-    If it does, locate the Pelican Server binary inside that container and
-    return a :class:`Origin`.  Returns *None* if the pod does not
-    contain a recognised Pelican Origin container or if the binary cannot be
-    found.
+    If it does, return a :class:`Origin`.  Returns *None* if the pod does not
+    contain a recognised Pelican Origin container.
 
     Parameters
     ----------
     pod:
         A dict representing the pod's JSON manifest (e.g. from
         ``kubectl get pod <n> -o json``).
+    context:
+        The Kubernetes context.  Defaults to the current context.
+    namespace:
+        The Kubernetes namespace.  Defaults to the namespace configured for
+        *context*.
 
     Returns
     -------
     Origin | None
     """
+    if context is None:
+        context = _current_context()
+    if namespace is None:
+        namespace = _namespace_for_context(context)
+
     try:
         pod_name: str = pod["metadata"]["name"]
         containers: list[dict] = pod["spec"]["containers"]
@@ -165,12 +195,16 @@ def examine_pod(
             namespace=namespace,
             pod_name=pod_name,
             container_name=container_name,
+            context=context,
         )
 
     return None
 
 
-def find_pelican_origin_pods(namespace: str) -> Generator[Origin]:
+def find_pelican_origin_pods(
+    context: Optional[str] = None,
+    namespace: Optional[str] = None,
+) -> Generator[Origin]:
     """
     List all pods in *namespace* and return information about every pod that
     contains a Pelican Origin container with a discoverable Pelican Server
@@ -178,8 +212,11 @@ def find_pelican_origin_pods(namespace: str) -> Generator[Origin]:
 
     Parameters
     ----------
+    context:
+        The Kubernetes context to use.  Defaults to the current context.
     namespace:
-        The Kubernetes namespace to search (e.g. ``"pelican"``).
+        The Kubernetes namespace to search.  Defaults to the namespace
+        configured for *context*.
 
     Yields
     ------
@@ -189,15 +226,24 @@ def find_pelican_origin_pods(namespace: str) -> Generator[Origin]:
 
     Raises
     ------
+    Error
+        If the context or namespace cannot be determined.
     subprocess.CalledProcessError
         If the initial ``kubectl get pods`` call fails (e.g. bad namespace,
         missing credentials).
     json.JSONDecodeError
         If kubectl returns unexpected output.
     """
+    if context is None:
+        context = _current_context()
+    if namespace is None:
+        namespace = _namespace_for_context(context)
+
     result = _run(
         [
             "kubectl",
+            "--context",
+            context,
             "get",
             "pods",
             "--namespace",
@@ -211,7 +257,7 @@ def find_pelican_origin_pods(namespace: str) -> Generator[Origin]:
     pods: list[dict] = pod_list.get("items", [])
 
     for pod in pods:
-        info = examine_pod(namespace, pod)
+        info = examine_pod(pod, context, namespace)
         if info is not None:
             yield info
 
@@ -331,11 +377,13 @@ def copy_inner_script_to_origin(origin: Origin):
     return _run(
         [
             "kubectl",
+            "--context",
+            origin.context,
             "cp",
             "-c",
             origin.container_name,
             INNER_SCRIPT,
-            f'{origin.namespace}/{origin.pod_name}:/tmp/{INNER_SCRIPT}',
+            f"{origin.namespace}/{origin.pod_name}:/tmp/{INNER_SCRIPT}",
         ]
     )
 
@@ -387,7 +435,6 @@ def get_exports_for_pod(origin: Origin) -> tuple[str, list[Export]]:
         raise InnerScriptError(f"Inner script returned error: {result['error']}")
 
 
-
 def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
     """
     Debugging function: interactively exec into an origin to take a look around.
@@ -410,6 +457,8 @@ def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:
     proc = subprocess.Popen(
         [
             "kubectl",
+            "--context",
+            origin.context,
             "exec",
             "--namespace",
             origin.namespace,
