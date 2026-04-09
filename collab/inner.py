@@ -24,9 +24,6 @@ class Export:
     error: Optional[str] = None
 
 
-OUTFILE = pathlib.Path("/tmp/pelican_storage_metrics.json")
-
-
 def get_binary_name() -> str:
     return (
         os.popen(
@@ -281,16 +278,6 @@ def handle_s3(origin_config: dict, result: dict) -> None:
 def main(argv=()):
     argv = argv or sys.argv
 
-    try:
-        if argv[1] == "cleanup":
-            try:
-                OUTFILE.unlink()
-            except FileNotFoundError:
-                pass
-            return 0
-    except IndexError:
-        pass
-
     result = {
         "status": "ok",
         "error": "",
@@ -306,11 +293,6 @@ def main(argv=()):
         "time": None,
         "storagetype": None,
     }
-
-    os.umask(
-        0o077
-    )  # ensure output file is only readable by owner - we may have a raw secret key in there
-    outfile = open(OUTFILE, "w")
 
     try:
         try:
@@ -338,17 +320,8 @@ def main(argv=()):
 
     finally:
         result['time'] = datetime.datetime.now().isoformat(timespec='seconds')
-        try:
-            json.dump(result, sys.stdout)
-            sys.stdout.flush()
-        except OSError:
-            pass
-        try:
-            json.dump(result, outfile)
-            outfile.flush()
-            outfile.close()
-        except OSError:
-            pass
+        json.dump(result, sys.stdout)
+        sys.stdout.flush()
 
     return 0
 
