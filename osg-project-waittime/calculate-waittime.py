@@ -233,8 +233,7 @@ def main():
 
     # Queue times
     queueTimes = getQueueTimes(users)
-    columnNames = ["Username", 
-                   "ProjectName", 
+    columnNames = ["ProjectName", 
                    "Start Time", 
                    "End Time", 
                    "Days of Zero Usage", 
@@ -247,8 +246,7 @@ def main():
                    "Number of Jobs"]
     df = pd.DataFrame(columns = columnNames)
     for i, userAttr in enumerate(queueTimes):
-        df.loc[i] = [userAttr.username, 
-                     ",".join(usernameToProject[userAttr.username]), 
+        df.loc[i] = [",".join(usernameToProject[userAttr.username]), 
                      userAttr.starttime, 
                      userAttr.endtime, 
                      userAttr.idledays, 
@@ -261,10 +259,6 @@ def main():
                      userAttr.njobs]
     
     df = df.loc[df["Aggregate Core Hours"] > 0]
-
-    def replaceCN(user):
-        return user.replace("/OU=LocalUser/CN=", "")
-    df["Username"] = df["Username"].apply(replaceCN)
 
     with open(args.outputfile, "w") as output_csv:
         output_csv.write(df.to_csv(index=False))
