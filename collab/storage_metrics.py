@@ -10,14 +10,15 @@ then locates the Pelican Server binary inside each such container.
 import argparse
 import configparser
 import json
-import os
 import re
 import subprocess
 import sys
-from collections.abc import Generator, Mapping
+from collections.abc import Generator
 from typing import Optional, Sequence
 
 from collab_types import Error, Export, InnerScriptError, Origin
+from helpers import _run
+from s3 import get_s3_bucket_size, handle_s3_exports
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -33,37 +34,6 @@ INNER_SCRIPT = "inner.py"
 # ---------------------------------------------------------------------------
 # Low-level helpers
 # ---------------------------------------------------------------------------
-
-
-def _run(
-    args: list[str],
-    *,
-    check: bool = True,
-    extra_env: Optional[Mapping[str, Optional[str]]] = None,
-) -> subprocess.CompletedProcess:
-    """Run a subprocess, capturing stdout/stderr as text.
-
-    If *extra_env* is given, the subprocess environment is a copy of
-    ``os.environ`` with those keys overlaid.  Values of ``None`` cause the
-    key to be removed from the environment; all other values are converted
-    to ``str``.
-    """
-    env: Optional[dict[str, str]] = None
-    if extra_env is not None:
-        env = dict(os.environ)
-        for k, v in extra_env.items():
-            if v is None:
-                env.pop(k, None)
-            else:
-                env[k] = str(v)
-    return subprocess.run(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=check,
-        env=env,
-    )
 
 
 def _run_in_origin(
@@ -471,11 +441,6 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
     return results
 
 
-def handle_s3_exports(s3_result: dict) -> list[dict]:
-    """Stub: extract S3 exports from the inner script's 's3' result dict."""
-    return s3_result['exports']
-
-
 def get_exports_for_pod(
     origin: Origin, prefix_pairs: Optional[list[tuple[str, str]]] = None
 ) -> tuple[str, list[dict]]:
@@ -499,114 +464,6 @@ def get_exports_for_pod(
         )
         exports = []
     return result['sitename'], exports
-
-
-def get_s3_bucket_size(
-    bucket: str,
-    endpoint: str,
-    *,
-    region: Optional[str] = None,
-    access_key: Optional[str] = None,
-    secret_key: Optional[str] = None,
-) -> int:
-    """
-    Return the total size in bytes of an S3 bucket, using the ``aws`` CLI.
-
-    First tries a HEAD-bucket debug probe: some S3 implementations (e.g. Ceph
-    RGW) report the bucket size in a response header visible in ``--debug``
-    output.  If no parseable size is found there, falls back to summing all
-    object sizes via ``list-objects-v2``.
-
-    Parameters
-    ----------
-    bucket:
-        The S3 bucket name.
-    endpoint:
-        The S3 endpoint URL.
-    region:
-        Value for ``AWS_DEFAULT_REGION``; defaults to empty string.
-    access_key:
-        Value for ``AWS_ACCESS_KEY_ID``; defaults to empty string.
-    secret_key:
-        Value for ``AWS_SECRET_ACCESS_KEY``; defaults to empty string.
-
-    Returns
-    -------
-    int
-        Total size in bytes (0 if the bucket is empty).
-
-    Raises
-    ------
-    subprocess.CalledProcessError
-        If the bucket is inaccessible or an ``aws`` CLI call fails.
-    """
-    extra_env = {
-        "AWS_DEFAULT_REGION": region or "",
-        "AWS_ACCESS_KEY_ID": access_key or "",
-        "AWS_SECRET_ACCESS_KEY": secret_key or "",
-        "AWS_S3_ADDRESSING_STYLE": "path",
-    }
-    # Step 1: HEAD bucket probe.  The debug output may contain a line like
-    # "x-rgw-bytes-used: 12345678" on Ceph-backed clusters.
-    ret = _run(
-        [
-            "aws",
-            "s3api",
-            "head-bucket",
-            "--bucket",
-            bucket,
-            "--endpoint-url",
-            endpoint,
-            "--debug",
-        ],
-        check=False,
-        extra_env=extra_env,
-    )
-    for line in (ret.stdout + ret.stderr).splitlines():
-        if re.search(r"bucket.*(size|bytes)", line, re.IGNORECASE):
-            m = re.search(r"\b(\d+)\b", line)
-            if m:
-                _printflush(f"{bucket}: size from HEAD probe")
-                return int(m.group(1))
-
-    # Step 2: Sanity probe — verify list access before the expensive full scan.
-    _run(
-        [
-            "aws",
-            "s3api",
-            "list-objects-v2",
-            "--bucket",
-            bucket,
-            "--endpoint-url",
-            endpoint,
-            "--max-keys",
-            "0",
-        ],
-        extra_env=extra_env,
-    )
-
-    # Step 3: Full sum.
-    ret = _run(
-        [
-            "aws",
-            "s3api",
-            "list-objects-v2",
-            "--bucket",
-            bucket,
-            "--endpoint-url",
-            endpoint,
-            "--query",
-            "sum(Contents[].Size)",
-            "--output",
-            "text",
-        ],
-        extra_env=extra_env,
-    )
-    text = ret.stdout.strip()
-    _printflush(f"{bucket}: size from full object sum")
-    if text in ("None", ""):
-        return 0
-    return int(text)
 
 
 def interactive_exec(origin: Origin, cmd: Sequence[str] = ("bash",)) -> int:

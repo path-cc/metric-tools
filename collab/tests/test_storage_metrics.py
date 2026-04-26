@@ -191,7 +191,7 @@ def test_check_namespace_access(mock_run, capsys):
     assert "forbidden" in captured
 
 
-@patch("storage_metrics._run")
+@patch("s3._run")
 def test_get_s3_bucket_size(mock_run):
     # HEAD probe matching bucket-size should return that value
     mock_run.return_value = MagicMock(stdout="", stderr="bucket-size: 1000\n")
