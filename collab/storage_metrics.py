@@ -25,6 +25,17 @@ from k8s import (
 from output import print_exports_table
 from s3 import get_s3_bucket_size, handle_s3_exports
 
+
+__all__ = [
+    "examine_pod",
+    "get_origin_export_dirs",
+    "get_s3_bucket_size",
+    "interactive_exec",
+    "print_exports_table",
+    "run_in_origin",
+]
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
