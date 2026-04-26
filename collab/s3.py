@@ -1,7 +1,7 @@
 import re
 from typing import Optional
 
-from helpers import _run
+from helpers import run
 
 
 def handle_s3_exports(s3_result: dict) -> list[dict]:
@@ -56,7 +56,7 @@ def get_s3_bucket_size(
     }
     # Step 1: HEAD bucket probe.  The debug output may contain a line like
     # "x-rgw-bytes-used: 12345678" on Ceph-backed clusters.
-    ret = _run(
+    ret = run(
         [
             "aws",
             "s3api",
@@ -78,7 +78,7 @@ def get_s3_bucket_size(
                 return int(m.group(1))
 
     # Step 2: Sanity probe — verify list access before the expensive full scan.
-    _run(
+    run(
         [
             "aws",
             "s3api",
@@ -94,7 +94,7 @@ def get_s3_bucket_size(
     )
 
     # Step 3: Full sum.
-    ret = _run(
+    ret = run(
         [
             "aws",
             "s3api",

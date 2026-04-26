@@ -14,10 +14,10 @@ import sys
 from typing import Optional
 
 from collab_types import Export, InnerScriptError, Origin
-from helpers import _run
+from helpers import run
 from k8s import (
-    _check_namespace_access,
-    _run_in_origin,
+    check_namespace_access,
+    run_in_origin,
     examine_pod,
     find_pelican_origin_pods,
     interactive_exec,
@@ -82,7 +82,7 @@ def get_origin_export_dirs(
     json.JSONDecodeError
         If the binary does not return valid JSON.
     """
-    result = _run_in_origin(
+    result = run_in_origin(
         origin,
         [
             "sh",
@@ -150,7 +150,7 @@ def copy_inner_script_to_origin(origin: Origin):
     Copy the inner script to the temp directory in *origin*
     so it can be run later.
     """
-    return _run(
+    return run(
         [
             "kubectl",
             "--context",
@@ -189,7 +189,7 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
     """
     if copy:
         copy_inner_script_to_origin(origin)
-    ret = _run_in_origin(origin, [f"/tmp/{INNER_SCRIPT}"] + list(args), check=False)
+    ret = run_in_origin(origin, [f"/tmp/{INNER_SCRIPT}"] + list(args), check=False)
     try:
         results = json.loads(ret.stdout)
     except json.JSONDecodeError as err:
@@ -227,7 +227,7 @@ def get_exports_for_pod(
     return result['sitename'], exports
 
 
-def _parse_args(
+def parse_args(
     argv,
 ) -> tuple[
     argparse.Namespace,
@@ -408,7 +408,7 @@ def _process_namespace(
     tuple[int, int]
         Updated ``(cluster_count, cluster_skipped)``.
     """
-    if not _check_namespace_access(cluster_name, context, namespace):
+    if not check_namespace_access(cluster_name, context, namespace):
         return cluster_count, cluster_skipped
 
     try:
@@ -471,7 +471,7 @@ def _process_namespace(
 
 
 def main(argv=None) -> int:
-    args, clusters, sub_ns_map = _parse_args(argv)
+    args, clusters, sub_ns_map = parse_args(argv)
 
     for cluster_name, section in clusters:
         context = section["context"]

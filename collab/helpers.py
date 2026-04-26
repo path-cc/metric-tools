@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Optional
 
 
-def _run(
+def run(
     args: list[str],
     *,
     check: bool = True,

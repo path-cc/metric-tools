@@ -6,13 +6,13 @@ from collections.abc import Generator
 from typing import Optional
 
 from collab_types import Error, Origin
-from helpers import _run
+from helpers import run
 
 # Image name substrings that identify a Pelican Origin container.
 ORIGIN_IMAGE_NAMES: tuple[str, ...] = ("osdf-origin", "origin")
 
 
-def _run_in_origin(
+def run_in_origin(
     origin: Origin,
     args: list[str],
     *,
@@ -30,10 +30,10 @@ def _run_in_origin(
         origin.container_name,
         origin.pod_name,
     ]
-    return _run(cmd + ["--"] + args, check=check)
+    return run(cmd + ["--"] + args, check=check)
 
 
-def _check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
+def check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
     """
     Return True if we have permission to get pods and exec into pods in *namespace*.
     Prints an error to stderr and returns False if either check fails.
@@ -63,7 +63,7 @@ def _check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
         ],
     ]
     for cmd in checks:
-        ret = _run(cmd, check=False)
+        ret = run(cmd, check=False)
         if ret.returncode != 0 or ret.stdout.strip() != "yes":
             print(
                 f"ERROR: insufficient permissions in cluster={cluster!r} "
@@ -77,21 +77,21 @@ def _check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
 
 def _current_context() -> str:
     """Return the current Kubernetes context, or raise Error if it cannot be determined."""
-    ret = _run(["kubectl", "config", "current-context"])
+    ret = run(["kubectl", "config", "current-context"])
     context = ret.stdout.strip()
     if not context:
         raise Error("Could not determine current Kubernetes context")
     return context
 
 
-def _namespace_for_context(context: Optional[str] = None) -> str:
+def namespace_for_context(context: Optional[str] = None) -> str:
     """
     Return the namespace configured for *context*, or raise Error if it cannot
     be determined.  If *context* is not given, uses the current context.
     """
     if context is None:
         context = _current_context()
-    ret = _run(["kubectl", "config", "get-contexts", "--no-headers", context])
+    ret = run(["kubectl", "config", "get-contexts", "--no-headers", context])
     for line in ret.stdout.splitlines():
         parts = re.split(r"\s+", line.strip())
         # Strip leading '*' marker for the active context
@@ -103,7 +103,7 @@ def _namespace_for_context(context: Optional[str] = None) -> str:
     raise Error(f"Could not determine namespace for context {context!r}")
 
 
-def _is_origin_container(container: dict) -> bool:
+def is_origin_container(container: dict) -> bool:
     """
     Return True if *container* (a Kubernetes container spec dict) looks like a
     Pelican Origin container based on its image name (one of ORIGIN_IMAGE_NAMES).
@@ -148,7 +148,7 @@ def examine_pod(
     if context is None:
         context = _current_context()
     if namespace is None:
-        namespace = _namespace_for_context(context)
+        namespace = namespace_for_context(context)
 
     try:
         pod_name: str = pod["metadata"]["name"]
@@ -157,7 +157,7 @@ def examine_pod(
         return None
 
     for container in containers:
-        if not _is_origin_container(container):
+        if not is_origin_container(container):
             continue
 
         container_name: str = container["name"]
@@ -208,9 +208,9 @@ def find_pelican_origin_pods(
     if context is None:
         context = _current_context()
     if namespace is None:
-        namespace = _namespace_for_context(context)
+        namespace = namespace_for_context(context)
 
-    result = _run(
+    result = run(
         [
             "kubectl",
             "--context",
