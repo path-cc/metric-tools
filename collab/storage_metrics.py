@@ -15,37 +15,9 @@ import re
 import subprocess
 import sys
 from collections.abc import Generator, Mapping
-from dataclasses import dataclass
 from typing import Optional, Sequence
 
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class Origin:
-    """Information about how to exec into an origin container."""
-
-    namespace: str
-    pod_name: str
-    container_name: str
-    context: str
-
-    @property
-    def deployment(self) -> str:
-        return "-".join(self.pod_name.split("-")[:-2])
-
-
-@dataclass
-class Export:
-    """A storage prefix/federation prefix combo, plus whether it's public or not."""
-
-    storage_prefix: str
-    federation_prefix: str
-    public: bool
-    size: Optional[int] = None
-
+from collab_types import Error, Export, InnerScriptError, Origin
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -56,19 +28,6 @@ ORIGIN_IMAGE_NAMES: tuple[str, ...] = ("osdf-origin", "origin")
 
 # The script to run inside the pod to get usage info
 INNER_SCRIPT = "inner.py"
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
-class Error(Exception):
-    """Base exception class"""
-
-
-class InnerScriptError(Error):
-    """Something went wrong with the inner script executed inside the container"""
 
 
 # ---------------------------------------------------------------------------
