@@ -6,7 +6,6 @@ import datetime
 import errno
 import json
 import os
-import pathlib
 import subprocess
 import sys
 from typing import Optional
@@ -275,6 +274,69 @@ def handle_s3(origin_config: dict, result: dict) -> None:
     result['s3']['exports'] = [dataclasses.asdict(it) for it in exports]
 
 
+def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None:
+    """Implement scan mode: list subdirs of provided storage prefixes."""
+    # To determine public/private, we need the existing POSIX exports for longest-prefix matching
+    known_exports = get_posix_export_dirs(origin_config)
+    scanned_exports: list[Export] = []
+
+    for arg in scan_args:
+        if ":" not in arg:
+            print(
+                f"Warning: skipping malformed scan argument '{arg}' (expected storage:federation)",
+                file=sys.stderr,
+            )
+            continue
+        storage_root, _, federation_root = arg.partition(":")
+        storage_root = storage_root.rstrip("/")
+        federation_root = federation_root.rstrip("/")
+
+        # Determine public/private via longest prefix match on storage_root
+        match_public = False
+        match_found = False
+        best_len = -1
+        for ex in known_exports:
+            if ex.storage_prefix and storage_root.startswith(ex.storage_prefix):
+                if len(ex.storage_prefix) > best_len:
+                    best_len = len(ex.storage_prefix)
+                    match_public = ex.public
+                    match_found = True
+
+        if not match_found:
+            print(
+                f"Warning: No matching export found for {storage_root}; defaulting to private",
+                file=sys.stderr,
+            )
+
+        with os.scandir(storage_root) as it:
+            for entry in it:
+                if not entry.is_dir():
+                    continue
+
+                full_storage = os.path.join(storage_root, entry.name)
+                full_federation = federation_root + "/" + entry.name
+
+                export = Export(
+                    storage_prefix=full_storage,
+                    federation_prefix=full_federation,
+                    public=match_public,
+                )
+
+                try:
+                    export.size = get_dir_bytes(full_storage)
+                except Exception as err:
+                    print(
+                        f"{full_storage}: Error getting size: {err}",
+                        file=sys.stderr,
+                    )
+                    export.error = str(err)
+
+                scanned_exports.append(export)
+
+    result['posix']['exports'] = [dataclasses.asdict(it) for it in scanned_exports]
+    result['storagetype'] = "posix"
+
+
 def main(argv=()):
     argv = argv or sys.argv
 
@@ -309,7 +371,9 @@ def main(argv=()):
             return 1
 
         try:
-            if result['storagetype'] == "posix":
+            if len(argv) > 1 and argv[1] == "scan":
+                handle_scan(origin_config, result, argv[2:])
+            elif result['storagetype'] == "posix":
                 handle_posix(origin_config, result)
             elif result['storagetype'] == "s3":
                 handle_s3(origin_config, result)

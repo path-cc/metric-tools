@@ -1,5 +1,3 @@
-import argparse
-import configparser
 import json
 from unittest.mock import MagicMock, patch
 
@@ -269,13 +267,14 @@ def test_parse_args(tmp_path, monkeypatch):
     config_file.write_text("[nautilus]\ncontext = c1\n[tiger]\ncontext = c2\n")
 
     # No cluster flags: runs all clusters present in config
-    args, clusters = _parse_args([])
+    args, clusters, sub_ns_map = _parse_args([])
     assert len(clusters) == 2
     assert clusters[0][0] == "nautilus"
     assert clusters[1][0] == "tiger"
+    assert isinstance(sub_ns_map, dict)
 
     # Single cluster flag should only run that cluster
-    args, clusters = _parse_args(["--nautilus"])
+    args, clusters, sub_ns_map = _parse_args(["--nautilus"])
     assert len(clusters) == 1
     assert clusters[0][0] == "nautilus"
 

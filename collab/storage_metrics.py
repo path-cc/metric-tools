@@ -514,9 +514,15 @@ def handle_s3_exports(s3_result: dict) -> list[dict]:
     return s3_result['exports']
 
 
-def get_exports_for_pod(origin: Origin) -> tuple[str, list[dict]]:
+def get_exports_for_pod(
+    origin: Origin, prefix_pairs: Optional[list[tuple[str, str]]] = None
+) -> tuple[str, list[dict]]:
     copy_inner_script_to_origin(origin)
-    result = run_inner_script(origin, copy=False)
+    if prefix_pairs is not None:
+        args = ["scan"] + [f"{s}:{f}" for s, f in prefix_pairs]
+        result = run_inner_script(origin, *args, copy=False)
+    else:
+        result = run_inner_script(origin, copy=False)
     if result['status'] != "ok":
         raise InnerScriptError(f"Inner script returned error: {result['error']}")
     storagetype = result['storagetype']
@@ -729,7 +735,11 @@ def print_exports_table(path: str, *, si: bool = False) -> None:
 
 def _parse_args(
     argv,
-) -> tuple[argparse.Namespace, list[tuple[str, configparser.SectionProxy]]]:
+) -> tuple[
+    argparse.Namespace,
+    list[tuple[str, configparser.SectionProxy]],
+    dict[str, list[tuple[str, str]]],
+]:
     """
     Parse CLI arguments, validate them, read config.ini, and build the cluster list.
 
@@ -739,6 +749,9 @@ def _parse_args(
         Parsed argument namespace.
     clusters:
         Ordered list of ``(cluster_name, config_section)`` pairs to process.
+    sub_ns_map:
+        Dict mapping section names like "CLUSTER:POD_PREFIX" to lists of
+        (storage_prefix, federation_prefix) tuples.
     """
     parser = argparse.ArgumentParser(
         description="Collect Pelican Origin storage metrics from Kubernetes clusters."
@@ -796,7 +809,71 @@ def _parse_args(
     if run_tempest and "tempest" in cfg:
         clusters.append(("tempest", cfg["tempest"]))
 
-    return args, clusters
+    # Parse [cluster:pod-prefix] sections for sub-namespace mapping
+    sub_ns_map: dict[str, list[tuple[str, str]]] = {}
+    known_clusters = {"nautilus", "tiger", "tempest"}
+    for section_name in cfg.sections():
+        if ":" not in section_name:
+            continue
+        cluster_name, pod_prefix = section_name.split(":", 1)
+        if cluster_name not in known_clusters:
+            continue
+
+        section = cfg[section_name]
+        prefix_pairs: list[tuple[str, str]] = []
+
+        # Parse numbered storage_prefix_N / federation_prefix_N pairs
+        n = 1
+        while True:
+            storage_key = f"storage_prefix_{n}"
+            federation_key = f"federation_prefix_{n}"
+            if storage_key not in section or federation_key not in section:
+                break
+            storage_prefix = section[storage_key]
+            federation_prefix = section[federation_key]
+            prefix_pairs.append((storage_prefix, federation_prefix))
+            n += 1
+
+        if prefix_pairs:
+            sub_ns_map[section_name] = prefix_pairs
+
+    return args, clusters, sub_ns_map
+
+
+def _get_sub_ns_prefixes(
+    sub_ns_map: dict[str, list[tuple[str, str]]],
+    cluster_name: str,
+    pod_name: str,
+) -> Optional[list[tuple[str, str]]]:
+    """
+    Find prefix pairs for a pod from the sub-namespace map.
+
+    Iterates through sub_ns_map for keys starting with "cluster_name:".
+    Returns the prefix list for the first key where pod_name.startswith(pod_prefix).
+    Returns None if no match.
+
+    Parameters
+    ----------
+    sub_ns_map:
+        Dict mapping "CLUSTER:POD_PREFIX" to lists of (storage_prefix, federation_prefix) tuples.
+    cluster_name:
+        The cluster name to search for.
+    pod_name:
+        The pod name to match against pod_prefix.
+
+    Returns
+    -------
+    list[tuple[str, str]] | None
+        The prefix pairs if a match is found, otherwise None.
+    """
+    prefix = f"{cluster_name}:"
+    for key in sub_ns_map:
+        if not key.startswith(prefix):
+            continue
+        pod_prefix = key[len(prefix) :]
+        if pod_name.startswith(pod_prefix):
+            return sub_ns_map[key]
+    return None
 
 
 def _process_namespace(
@@ -805,6 +882,7 @@ def _process_namespace(
     namespace: str,
     fh,
     args: argparse.Namespace,
+    sub_ns_map: dict[str, list[tuple[str, str]]],
     cluster_count: int,
     cluster_skipped: int,
 ) -> tuple[int, int]:
@@ -824,6 +902,8 @@ def _process_namespace(
         Open file handle to append JSON lines to.
     args:
         Parsed CLI arguments (uses ``args.n``, ``args.s``, ``args.pod``).
+    sub_ns_map:
+        Sub-namespace mapping dict from _parse_args.
     cluster_count:
         Number of origins already processed in this cluster run.
     cluster_skipped:
@@ -859,32 +939,45 @@ def _process_namespace(
         exports = None
         sitename = None
         ok = True
-        try:
-            _printflush(f"{origin.pod_name}: Getting exports...")
-            sitename, exports = get_exports_for_pod(origin)
-        except Exception as err:
-            print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
-            ok = False
+        prefix_pairs = _get_sub_ns_prefixes(sub_ns_map, cluster_name, origin.pod_name)
 
-        _printflush(f"{origin.pod_name} {'ok' if ok else 'FAIL'}")
-        fh.write(
-            json.dumps(
-                {
-                    "origin": dataclasses.asdict(origin),
-                    "exports": exports,
-                    "sitename": sitename,
-                }
+        # Determine if pod should be processed or skipped
+        should_process = prefix_pairs is not None or cluster_name == "nautilus"
+
+        if should_process:
+            try:
+                _printflush(f"{origin.pod_name}: Getting exports...")
+                if prefix_pairs is not None:
+                    # Matched Tiger/Tempest pod: run inner.py with scan mode
+                    sitename, exports = get_exports_for_pod(
+                        origin, prefix_pairs=prefix_pairs
+                    )
+                else:
+                    # Nautilus pods: auto-discovery (no args)
+                    sitename, exports = get_exports_for_pod(origin)
+            except Exception as err:
+                print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
+                ok = False
+
+            _printflush(f"{origin.pod_name} {'ok' if ok else 'FAIL'}")
+            fh.write(
+                json.dumps(
+                    {
+                        "origin": dataclasses.asdict(origin),
+                        "exports": exports,
+                        "sitename": sitename,
+                    }
+                )
+                + "\n"
             )
-            + "\n"
-        )
-        fh.flush()
-        cluster_count += 1
+            fh.flush()
+            cluster_count += 1
 
     return cluster_count, cluster_skipped
 
 
 def main(argv=None) -> int:
-    args, clusters = _parse_args(argv)
+    args, clusters, sub_ns_map = _parse_args(argv)
 
     for cluster_name, section in clusters:
         context = section["context"]
@@ -903,6 +996,7 @@ def main(argv=None) -> int:
                     namespace,
                     fh,
                     args,
+                    sub_ns_map,
                     cluster_count,
                     cluster_skipped,
                 )
