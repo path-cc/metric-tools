@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-pelican_origin_finder.py
+storage_metrics.py
 
 Outer-script functions (requires: Python 3.9, kubectl available on PATH).
 Finds pods containing Pelican Origin containers in a given Kubernetes namespace,
