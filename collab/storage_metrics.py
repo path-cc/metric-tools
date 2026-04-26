@@ -9,7 +9,6 @@ then locates the Pelican Server binary inside each such container.
 
 import argparse
 import configparser
-import dataclasses
 import json
 import os
 import re
@@ -32,6 +31,10 @@ class Origin:
     pod_name: str
     container_name: str
     context: str
+
+    @property
+    def deployment(self) -> str:
+        return "-".join(self.pod_name.split("-")[:-2])
 
 
 @dataclass
@@ -963,7 +966,7 @@ def _process_namespace(
             fh.write(
                 json.dumps(
                     {
-                        "origin": dataclasses.asdict(origin),
+                        "origin": origin.deployment,
                         "exports": exports,
                         "sitename": sitename,
                     }

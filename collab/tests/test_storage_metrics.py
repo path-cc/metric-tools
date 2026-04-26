@@ -61,7 +61,7 @@ def test_examine_pod():
 
         # Pod with origin container should be recognized and returned
         pod_origin = {
-            "metadata": {"name": "pod-1"},
+            "metadata": {"name": "pod-1-2"},
             "spec": {
                 "containers": [
                     {
@@ -74,14 +74,14 @@ def test_examine_pod():
         origin = examine_pod(pod_origin)
         assert origin == Origin(
             namespace="my-ns",
-            pod_name="pod-1",
+            pod_name="pod-1-2",
             container_name="c1",
             context="my-context",
         )
 
         # Pod with non-origin container should return None
         pod_no_origin = {
-            "metadata": {"name": "pod-2"},
+            "metadata": {"name": "pod-1-2"},
             "spec": {"containers": [{"name": "c2", "image": "nginx:latest"}]},
         }
         assert examine_pod(pod_no_origin) is None
