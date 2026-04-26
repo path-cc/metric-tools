@@ -3,19 +3,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from storage_metrics import (
-    Error,
-    InnerScriptError,
-    Origin,
-    _check_namespace_access,
-    _is_origin_container,
-    _namespace_for_context,
-    _parse_args,
-    examine_pod,
-    get_exports_for_pod,
-    get_s3_bucket_size,
-    print_exports_table,
-)
+from collab_types import Error, InnerScriptError, Origin
+from k8s import _check_namespace_access, _is_origin_container, _namespace_for_context, examine_pod
+from output import print_exports_table
+from s3 import get_s3_bucket_size
+from storage_metrics import _parse_args, get_exports_for_pod
 
 # ---------------------------------------------------------------------------
 # Pure function tests - No mocks, testing logic directly
@@ -55,8 +47,8 @@ def test_is_origin_container():
 def test_examine_pod():
     # Mock _current_context and _namespace_for_context to avoid subprocess calls
     with (
-        patch("storage_metrics._current_context", return_value="my-context"),
-        patch("storage_metrics._namespace_for_context", return_value="my-ns"),
+        patch("k8s._current_context", return_value="my-context"),
+        patch("k8s._namespace_for_context", return_value="my-ns"),
     ):
 
         # Pod with origin container should be recognized and returned
@@ -158,7 +150,7 @@ def test_print_exports_table(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 
 
-@patch("storage_metrics._run")
+@patch("k8s._run")
 def test_namespace_for_context(mock_run):
     # Active context with * marker should parse correctly
     mock_run.return_value = MagicMock(stdout="*  ctx-1  cluster-1  user-1  ns-1\n")
@@ -174,7 +166,7 @@ def test_namespace_for_context(mock_run):
         _namespace_for_context("ctx-3")
 
 
-@patch("storage_metrics._run")
+@patch("k8s._run")
 def test_check_namespace_access(mock_run, capsys):
     # Both checks passing should return True
     mock_run.return_value = MagicMock(returncode=0, stdout="yes")
