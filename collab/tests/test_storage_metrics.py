@@ -7,7 +7,8 @@ from collab_types import Error, InnerScriptError, Origin
 from k8s import check_namespace_access, is_origin_container, namespace_for_context, examine_pod
 from output import print_exports_table
 from s3 import get_s3_bucket_size
-from storage_metrics import parse_args, get_exports_for_pod
+from pelican import get_exports_for_pod
+from storage_metrics import parse_args
 
 # ---------------------------------------------------------------------------
 # Pure function tests - No mocks, testing logic directly
@@ -206,8 +207,8 @@ def test_get_s3_bucket_size(mock_run):
     assert get_s3_bucket_size("my-bucket", "http://endpoint") == 0
 
 
-@patch("storage_metrics.run_inner_script")
-@patch("storage_metrics.copy_inner_script_to_origin")
+@patch("pelican.run_inner_script")
+@patch("pelican.copy_inner_script_to_origin")
 def test_get_exports_for_pod(mock_copy, mock_run_inner):
     # Helper to create test Origin object
     origin = Origin(namespace="ns", pod_name="pod", container_name="c", context="ctx")
