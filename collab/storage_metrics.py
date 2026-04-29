@@ -17,12 +17,21 @@ from k8s import check_namespace_access, find_pelican_origin_pods
 from pelican import get_exports_for_pod
 
 
+def match_collab(fed_prefix: str, collab_map: dict[str, list[str]]) -> Optional[str]:
+    """Return the collab name whose prefix list contains a startswith match, else None."""
+    for collab, patterns in collab_map.items():
+        if any(fed_prefix.startswith(p) for p in patterns):
+            return collab
+    return None
+
+
 def parse_args(
     argv,
 ) -> tuple[
     argparse.Namespace,
     list[tuple[str, configparser.SectionProxy]],
     dict[str, list[tuple[str, str]]],
+    dict[str, list[str]],
 ]:
     """
     Parse CLI arguments, validate them, read config.ini, and build the cluster list.
@@ -36,6 +45,9 @@ def parse_args(
     sub_ns_map:
         Dict mapping section names like "CLUSTER:POD_PREFIX" to lists of
         (storage_prefix, federation_prefix) tuples.
+    collab_map:
+        Dict mapping collab name to list of federation prefix patterns (from
+        the ``[collabs]`` config section).  Empty dict if the section is absent.
     """
     parser = argparse.ArgumentParser(
         description="Collect Pelican Origin storage metrics from Kubernetes clusters."
@@ -83,6 +95,7 @@ def parse_args(
     run_tempest = args.tempest or not any_cluster
 
     cfg = configparser.ConfigParser()
+    cfg.optionxform = str  # preserve key case
     cfg.read("config.ini")
 
     clusters = []
@@ -121,7 +134,12 @@ def parse_args(
         if prefix_pairs:
             sub_ns_map[section_name] = prefix_pairs
 
-    return args, clusters, sub_ns_map
+    collab_map: dict[str, list[str]] = {}
+    if "collabs" in cfg:
+        for collab_name, prefixes_str in cfg["collabs"].items():
+            collab_map[collab_name] = prefixes_str.split()
+
+    return args, clusters, sub_ns_map, collab_map
 
 
 def _get_sub_ns_prefixes(
@@ -261,7 +279,7 @@ def _process_namespace(
 
 
 def main(argv=None) -> int:
-    args, clusters, sub_ns_map = parse_args(argv)
+    args, clusters, sub_ns_map, _collab_map = parse_args(argv)
 
     for cluster_name, section in clusters:
         context = section["context"]

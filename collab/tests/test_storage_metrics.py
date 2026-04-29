@@ -5,7 +5,7 @@ import pytest
 
 from collab_types import Error, InnerScriptError, Origin
 from k8s import check_namespace_access, is_origin_container, namespace_for_context, examine_pod
-from output import print_exports_table
+from output import match_collab, print_exports_table
 from s3 import get_s3_bucket_size
 from pelican import get_exports_for_pod
 from storage_metrics import parse_args
@@ -146,6 +146,40 @@ def test_print_exports_table(tmp_path, capsys):
     assert "(no data)" in captured
 
 
+def test_print_exports_table_with_collab_map(tmp_path, capsys):
+    jsonl_file = tmp_path / "test.jsonl"
+    data = [
+        {
+            "sitename": "site1",
+            "exports": [
+                {"federation_prefix": "/EHT/public", "public": True, "size": 2**40},
+                {"federation_prefix": "/ospool/other", "public": True, "size": 2**39},
+            ],
+        }
+    ]
+    with open(jsonl_file, "w") as f:
+        for entry in data:
+            f.write(json.dumps(entry) + "\n")
+
+    collab_map = {"EHT": ["/EHT/public", "/EHT/private"]}
+
+    # Collab column is prepended; unmatched prefix shows (unknown)
+    print_exports_table(str(jsonl_file), collab_map=collab_map)
+    captured = capsys.readouterr().out
+    assert "collab" in captured
+    assert "EHT" in captured
+    assert "(unknown)" in captured
+    assert "/EHT/public" in captured
+    assert "/ospool/other" in captured
+
+    # Empty collab_map: collab column still present
+    print_exports_table(str(jsonl_file), collab_map={})
+    captured = capsys.readouterr().out
+    assert "collab" in captured
+    assert "(unknown)" in captured
+    assert "federation_prefix" in captured
+
+
 # ---------------------------------------------------------------------------
 # Mocked function tests - Tests that use mocks for external dependencies
 # ---------------------------------------------------------------------------
@@ -260,17 +294,67 @@ def test_parse_args(tmp_path, monkeypatch):
     config_file.write_text("[nautilus]\ncontext = c1\n[tiger]\ncontext = c2\n")
 
     # No cluster flags: runs all clusters present in config
-    args, clusters, sub_ns_map = parse_args([])
+    args, clusters, sub_ns_map, collab_map = parse_args([])
     assert len(clusters) == 2
     assert clusters[0][0] == "nautilus"
     assert clusters[1][0] == "tiger"
     assert isinstance(sub_ns_map, dict)
+    assert collab_map == {}
 
     # Single cluster flag should only run that cluster
-    args, clusters, sub_ns_map = parse_args(["--nautilus"])
+    args, clusters, sub_ns_map, collab_map = parse_args(["--nautilus"])
     assert len(clusters) == 1
     assert clusters[0][0] == "nautilus"
 
     # -s and --pod together should raise parser error (mutually exclusive)
     with pytest.raises(SystemExit):
         parse_args(["-s", "10", "--pod", "some-pod"])
+
+
+def test_parse_args_collab_map(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_file = tmp_path / "config.ini"
+
+    # Single prefix per collab
+    config_file.write_text(
+        "[collabs]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n"
+    )
+    _, _, _, collab_map = parse_args([])
+    assert collab_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
+
+    # Multiple space-separated prefixes
+    config_file.write_text(
+        "[collabs]\nEvent_Horizon_Telescope = /EHT/public /EHT/private\n"
+    )
+    _, _, _, collab_map = parse_args([])
+    assert collab_map == {"Event_Horizon_Telescope": ["/EHT/public", "/EHT/private"]}
+
+    # Empty [collabs] section
+    config_file.write_text("[collabs]\n")
+    _, _, _, collab_map = parse_args([])
+    assert collab_map == {}
+
+
+def test_match_collab():
+    collab_map = {
+        "EHT": ["/EHT/public", "/EHT/private"],
+        "REDTOP": ["/REDTOP/public"],
+    }
+
+    # Exact prefix match
+    assert match_collab("/EHT/public", collab_map) == "EHT"
+
+    # Sub-path match (prefix is a prefix of the federation path)
+    assert match_collab("/EHT/public/data/file.root", collab_map) == "EHT"
+
+    # Match on second prefix of same collab
+    assert match_collab("/EHT/private", collab_map) == "EHT"
+
+    # Match on different collab
+    assert match_collab("/REDTOP/public", collab_map) == "REDTOP"
+
+    # No match
+    assert match_collab("/ospool/uc-shared", collab_map) is None
+
+    # Empty map
+    assert match_collab("/EHT/public", {}) is None
