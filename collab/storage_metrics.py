@@ -9,6 +9,7 @@ then locates the Pelican Server binary inside each such container.
 
 import argparse
 import configparser
+import fnmatch
 import json
 import sys
 from typing import Optional
@@ -198,6 +199,45 @@ def _get_sub_ns_prefixes(
     return None
 
 
+def _process_origin(
+    cluster_name: str,
+    origin,
+    prefix_pairs: Optional[list[tuple[str, str]]],
+    fh,
+    args: argparse.Namespace,
+) -> None:
+    """Fetch exports for one origin and append the result to *fh*."""
+    exports = None
+    sitename = None
+    ok = True
+    try:
+        if args.verbose:
+            print(
+                f"[{cluster_name}] {origin.pod_name}: Getting exports...",
+                file=sys.stderr,
+                flush=True,
+            )
+        if prefix_pairs is not None:
+            sitename, exports = get_exports_for_pod(origin, prefix_pairs=prefix_pairs)
+        else:
+            sitename, exports = get_exports_for_pod(origin)
+    except Exception as err:
+        print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
+        ok = False
+
+    if args.verbose:
+        print(
+            f"[{cluster_name}] {origin.pod_name}: {'ok' if ok else 'FAIL'}",
+            file=sys.stderr,
+            flush=True,
+        )
+    fh.write(
+        json.dumps({"origin": origin.deployment, "exports": exports, "sitename": sitename})
+        + "\n"
+    )
+    fh.flush()
+
+
 def _process_namespace(
     cluster_name: str,
     context: str,
@@ -207,37 +247,24 @@ def _process_namespace(
     sub_ns_map: dict[str, list[tuple[str, str]]],
     cluster_count: int,
     cluster_skipped: int,
-) -> tuple[int, int]:
+    exclude_globs: Optional[list[str]] = None,
+) -> tuple[int, int, int, int]:
     """
     Process all origins in one namespace: check access, list pods, apply filters,
     collect exports, and append results to *fh*.
 
-    Parameters
-    ----------
-    cluster_name:
-        Human-readable cluster name (used in error messages).
-    context:
-        kubectl context for this cluster.
-    namespace:
-        Kubernetes namespace to search.
-    fh:
-        Open file handle to append JSON lines to.
-    args:
-        Parsed CLI arguments (uses ``args.n``, ``args.s``, ``args.pod``).
-    sub_ns_map:
-        Sub-namespace mapping dict from _parse_args.
-    cluster_count:
-        Number of origins already processed in this cluster run.
-    cluster_skipped:
-        Number of origins already skipped (for ``-s`` resumption).
-
     Returns
     -------
-    tuple[int, int]
-        Updated ``(cluster_count, cluster_skipped)``.
+    tuple[int, int, int, int]
+        Updated ``(cluster_count, cluster_skipped, eligible, excluded)`` where
+        *eligible* is the number of pods that would have been processed and
+        *excluded* is how many of those were silently skipped by *exclude_globs*.
     """
+    if exclude_globs is None:
+        exclude_globs = []
+
     if not check_namespace_access(cluster_name, context, namespace):
-        return cluster_count, cluster_skipped
+        return cluster_count, cluster_skipped, 0, 0
 
     try:
         origins = list(find_pelican_origin_pods(context=context, namespace=namespace))
@@ -247,65 +274,40 @@ def _process_namespace(
             f"namespace={namespace!r}: {err}",
             file=sys.stderr,
         )
-        return cluster_count, cluster_skipped
+        return cluster_count, cluster_skipped, 0, 0
+
+    eligible = 0
+    excluded = 0
 
     for origin in origins:
         if args.n is not None and cluster_count >= args.n:
             break
-        if args.pod and not any(origin.pod_name.startswith(p) for p in args.pod):
+
+        explicitly_selected = bool(args.pod) and any(
+            origin.pod_name.startswith(p) for p in args.pod
+        )
+        if args.pod and not explicitly_selected:
             continue
         if cluster_skipped < args.s:
             cluster_skipped += 1
             continue
 
-        exports = None
-        sitename = None
-        ok = True
         prefix_pairs = _get_sub_ns_prefixes(sub_ns_map, cluster_name, origin.pod_name)
+        if not (prefix_pairs is not None or cluster_name == "nautilus"):
+            continue
 
-        # Determine if pod should be processed or skipped
-        should_process = prefix_pairs is not None or cluster_name == "nautilus"
+        eligible += 1
 
-        if should_process:
-            try:
-                if args.verbose:
-                    print(
-                        f"[{cluster_name}] {origin.pod_name}: Getting exports...",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                if prefix_pairs is not None:
-                    # Matched Tiger/Tempest pod: run inner.py with scan mode
-                    sitename, exports = get_exports_for_pod(
-                        origin, prefix_pairs=prefix_pairs
-                    )
-                else:
-                    # Nautilus pods: auto-discovery (no args)
-                    sitename, exports = get_exports_for_pod(origin)
-            except Exception as err:
-                print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
-                ok = False
+        if not explicitly_selected and any(
+            fnmatch.fnmatch(origin.deployment, g) for g in exclude_globs
+        ):
+            excluded += 1
+            continue
 
-            if args.verbose:
-                print(
-                    f"[{cluster_name}] {origin.pod_name}: {'ok' if ok else 'FAIL'}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-            fh.write(
-                json.dumps(
-                    {
-                        "origin": origin.deployment,
-                        "exports": exports,
-                        "sitename": sitename,
-                    }
-                )
-                + "\n"
-            )
-            fh.flush()
-            cluster_count += 1
+        _process_origin(cluster_name, origin, prefix_pairs, fh, args)
+        cluster_count += 1
 
-    return cluster_count, cluster_skipped
+    return cluster_count, cluster_skipped, eligible, excluded
 
 
 def main(argv=None) -> int:
@@ -323,14 +325,17 @@ def main(argv=None) -> int:
         context = section["context"]
         namespaces = section["namespaces"].split()
         out_file = section["file"]
+        exclude_globs = section.get("exclude_origins", "").split()
         cluster_count = 0
         cluster_skipped = 0
+        cluster_eligible = 0
+        cluster_excluded = 0
 
         with open(out_file, "a") as fh:
             for namespace in namespaces:
                 if args.n is not None and cluster_count >= args.n:
                     break
-                cluster_count, cluster_skipped = _process_namespace(
+                cluster_count, cluster_skipped, eligible, excluded = _process_namespace(
                     cluster_name,
                     context,
                     namespace,
@@ -339,7 +344,13 @@ def main(argv=None) -> int:
                     sub_ns_map,
                     cluster_count,
                     cluster_skipped,
+                    exclude_globs,
                 )
+                cluster_eligible += eligible
+                cluster_excluded += excluded
+
+        if cluster_eligible > 0 and cluster_eligible == cluster_excluded:
+            print(f"All pods for {cluster_name} skipped.", file=sys.stderr)
 
         if table:
             print_exports_table(out_file, collab_map=collab_map)

@@ -434,7 +434,7 @@ def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
     (tmp_path / "config.ini").write_text(
         f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\n"
     )
-    mock_process.return_value = (1, 0)
+    mock_process.return_value = (1, 0, 1, 0)
 
     # --table triggers print_exports_table after the cluster
     main(["--nautilus", "--table"])
@@ -444,3 +444,63 @@ def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
     mock_table.reset_mock()
     main(["--nautilus"])
     mock_table.assert_not_called()
+
+
+@patch("storage_metrics.get_exports_for_pod")
+@patch("storage_metrics.find_pelican_origin_pods")
+@patch("storage_metrics.check_namespace_access")
+def test_process_namespace_exclude(mock_access, mock_find, mock_exports, tmp_path):
+    mock_access.return_value = True
+    mock_exports.return_value = ("site1", [])
+
+    origin_excl = Origin(namespace="ns", pod_name="nsdf-origin-abc-def", container_name="c", context="ctx")
+    origin_kept = Origin(namespace="ns", pod_name="my-origin-abc-def", container_name="c", context="ctx")
+    mock_find.return_value = [origin_excl, origin_kept]
+
+    args = argparse.Namespace(n=None, s=0, pod=[], verbose=False)
+    out_file = tmp_path / "out.jsonl"
+
+    # nsdf-origin matches the glob; my-origin does not
+    with open(out_file, "w") as fh:
+        count, _, eligible, excluded = _process_namespace(
+            "nautilus", "ctx", "ns", fh, args, {}, 0, 0, exclude_globs=["nsdf-origin"]
+        )
+    assert eligible == 2
+    assert excluded == 1
+    assert count == 1
+    assert mock_exports.call_count == 1
+
+    # -p selects the excluded pod explicitly: exclusion does not apply
+    mock_exports.reset_mock()
+    args_p = argparse.Namespace(n=None, s=0, pod=["nsdf-origin"], verbose=False)
+    with open(out_file, "w") as fh:
+        count, _, eligible, excluded = _process_namespace(
+            "nautilus", "ctx", "ns", fh, args_p, {}, 0, 0, exclude_globs=["nsdf-origin"]
+        )
+    assert excluded == 0
+    assert count == 1
+
+
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
+def test_main_all_pods_skipped(mock_process, mock_table, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    out_file = str(tmp_path / "nautilus.jsonl")
+    (tmp_path / "config.ini").write_text(
+        f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\nexclude_origins = some-origin\n"
+    )
+
+    # All eligible pods excluded: warning printed
+    mock_process.return_value = (0, 0, 3, 3)
+    main(["--nautilus"])
+    assert "All pods for nautilus skipped." in capsys.readouterr().err
+
+    # Only some excluded: no warning
+    mock_process.return_value = (1, 0, 3, 2)
+    main(["--nautilus"])
+    assert "All pods for nautilus skipped." not in capsys.readouterr().err
+
+    # No eligible pods at all: no warning
+    mock_process.return_value = (0, 0, 0, 0)
+    main(["--nautilus"])
+    assert "All pods for nautilus skipped." not in capsys.readouterr().err
