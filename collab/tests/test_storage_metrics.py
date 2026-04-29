@@ -177,6 +177,8 @@ def test_print_exports_table_with_collab_map(tmp_path, capsys):
     assert "(unknown)" in captured
     assert "/EHT/public" in captured
     assert "/ospool/other" in captured
+    # Sorted by collab then federation_prefix; '(' < 'E' in ASCII
+    assert captured.index("(unknown)") < captured.index("EHT")
 
     # Empty collab_map: collab column still present
     print_exports_table(str(jsonl_file), collab_map={})

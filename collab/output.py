@@ -71,9 +71,10 @@ def print_exports_table(
                     rows.append((collab, fed, str(pub), f"{size / divisor:.2f}"))
 
     if not rows:
-        print("(no data)")
+        print("(no data)\n")
         return
 
+    rows.sort(key=lambda r: (r[0], r[1]))
     headers = ("collab", "federation_prefix", "public", size_header)
     col_widths = [
         max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)
@@ -84,3 +85,4 @@ def print_exports_table(
     print(sep)
     for row in rows:
         print(fmt.format(*row))
+    print()
