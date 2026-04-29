@@ -177,6 +177,47 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
 def get_exports_for_pod(
     origin: Origin, prefix_pairs: Optional[list[tuple[str, str]]] = None
 ) -> tuple[str, list[dict]]:
+    """
+    Copy ``inner.py`` into *origin*, run it, and return the sitename and exports.
+
+    Two modes, selected by *prefix_pairs*:
+
+    Auto-discovery (``prefix_pairs=None``):
+        ``inner.py`` is invoked with no arguments.  It discovers exports on its
+        own — used for Nautilus pods, where the storage layout is self-describing.
+
+    Scan mode (``prefix_pairs`` provided):
+        ``inner.py`` is invoked as ``inner.py scan <storage>:<federation> ...``
+        with one argument per pair.  Used for Tiger/Tempest pods, where the
+        storage-to-federation prefix mapping is known from the config.
+
+    The export dicts in the returned list come directly from the inner script:
+    POSIX exports include at minimum ``federation_prefix``, ``public``, and
+    ``size`` (bytes); S3 exports have the same shape after ``handle_s3_exports``
+    resolves bucket sizes.
+
+    Parameters
+    ----------
+    origin:
+        The pod to exec into.
+    prefix_pairs:
+        List of ``(storage_prefix, federation_prefix)`` tuples for scan mode.
+        Pass ``None`` for auto-discovery.
+
+    Returns
+    -------
+    tuple[str, list[dict]]
+        ``(sitename, exports)`` where *sitename* is the origin's reported site
+        name and *exports* is the list of export dicts (empty list for unknown
+        storage types).
+
+    Raises
+    ------
+    InnerScriptError
+        If ``inner.py`` returns non-JSON output or a ``status != "ok"`` result.
+    subprocess.CalledProcessError
+        If any ``kubectl`` call fails.
+    """
     copy_inner_script_to_origin(origin)
     if prefix_pairs is not None:
         args = ["scan"] + [f"{s}:{f}" for s, f in prefix_pairs]
