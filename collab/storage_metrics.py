@@ -83,6 +83,12 @@ def parse_args(
         metavar="PREFIX",
         help="Only process pods whose name starts with PREFIX (may be given multiple times)",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print progress messages to stderr",
+    )
     args = parser.parse_args(argv)
 
     if args.s and args.pod:
@@ -248,7 +254,8 @@ def _process_namespace(
 
         if should_process:
             try:
-                print(f"{origin.pod_name}: Getting exports...", flush=True)
+                if args.verbose:
+                    print(f"[{cluster_name}] {origin.pod_name}: Getting exports...", file=sys.stderr, flush=True)
                 if prefix_pairs is not None:
                     # Matched Tiger/Tempest pod: run inner.py with scan mode
                     sitename, exports = get_exports_for_pod(
@@ -261,7 +268,8 @@ def _process_namespace(
                 print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
                 ok = False
 
-            print(f"{origin.pod_name} {'ok' if ok else 'FAIL'}", flush=True)
+            if args.verbose:
+                print(f"[{cluster_name}] {origin.pod_name}: {'ok' if ok else 'FAIL'}", file=sys.stderr, flush=True)
             fh.write(
                 json.dumps(
                     {
