@@ -1,14 +1,20 @@
+import argparse
 import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from collab_types import Error, InnerScriptError, Origin
-from k8s import check_namespace_access, is_origin_container, namespace_for_context, examine_pod
+from k8s import (
+    check_namespace_access,
+    examine_pod,
+    is_origin_container,
+    namespace_for_context,
+)
 from output import match_collab, print_exports_table
-from s3 import get_s3_bucket_size
 from pelican import get_exports_for_pod
-from storage_metrics import parse_args
+from s3 import get_s3_bucket_size
+from storage_metrics import _process_namespace, main, parse_args
 
 # ---------------------------------------------------------------------------
 # Pure function tests - No mocks, testing logic directly
@@ -300,6 +306,9 @@ def test_parse_args(tmp_path, monkeypatch):
     assert clusters[1][0] == "tiger"
     assert isinstance(sub_ns_map, dict)
     assert collab_map == {}
+    assert args.verbose is False
+    assert args.table is False
+    assert args.input == []
 
     # Single cluster flag should only run that cluster
     args, clusters, sub_ns_map, collab_map = parse_args(["--nautilus"])
@@ -316,9 +325,7 @@ def test_parse_args_collab_map(tmp_path, monkeypatch):
     config_file = tmp_path / "config.ini"
 
     # Single prefix per collab
-    config_file.write_text(
-        "[collabs]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n"
-    )
+    config_file.write_text("[collabs]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n")
     _, _, _, collab_map = parse_args([])
     assert collab_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
 
@@ -358,3 +365,82 @@ def test_match_collab():
 
     # Empty map
     assert match_collab("/EHT/public", {}) is None
+
+
+@patch("storage_metrics.get_exports_for_pod")
+@patch("storage_metrics.find_pelican_origin_pods")
+@patch("storage_metrics.check_namespace_access")
+def test_process_namespace_verbose(
+    mock_access, mock_find, mock_exports, tmp_path, capsys
+):
+    mock_access.return_value = True
+    origin = Origin(
+        namespace="ns",
+        pod_name="collab-shared-osdf-pelican-origin-abc",
+        container_name="c",
+        context="ctx",
+    )
+    mock_find.return_value = [origin]
+    mock_exports.return_value = ("site1", [])
+
+    sub_ns_map = {
+        "tiger:collab-shared-osdf-pelican-origin": [
+            ("/mnt/origin/public", "/ospool/uw-shared/public")
+        ]
+    }
+    out_file = tmp_path / "out.jsonl"
+
+    # verbose=True: before and after messages on stderr, nothing on stdout
+    args = argparse.Namespace(n=None, s=0, pod=[], verbose=True)
+    with open(out_file, "w") as fh:
+        _process_namespace("tiger", "ctx", "ns", fh, args, sub_ns_map, 0, 0)
+    captured = capsys.readouterr()
+    assert "tiger" in captured.err
+    assert "collab-shared-osdf-pelican-origin-abc" in captured.err
+    assert captured.out == ""
+
+    # verbose=False: no stderr progress output
+    args.verbose = False
+    with open(out_file, "w") as fh:
+        _process_namespace("tiger", "ctx", "ns", fh, args, sub_ns_map, 0, 0)
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == ""
+
+
+@patch("storage_metrics.print_exports_table")
+def test_main_input_flag(mock_table, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
+    )
+    f1 = tmp_path / "a.jsonl"
+    f2 = tmp_path / "b.jsonl"
+    f1.write_text("")
+    f2.write_text("")
+
+    # -i alone prints one table per file; clusters are not queried
+    main(["-i", str(f1), "-i", str(f2)])
+    assert mock_table.call_count == 2
+    calls = [c[0][0] for c in mock_table.call_args_list]
+    assert calls == [str(f1), str(f2)]
+
+
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
+def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out_file = str(tmp_path / "nautilus.jsonl")
+    (tmp_path / "config.ini").write_text(
+        f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\n"
+    )
+    mock_process.return_value = (1, 0)
+
+    # --table triggers print_exports_table after the cluster
+    main(["--nautilus", "--table"])
+    mock_table.assert_called_once_with(out_file, collab_map={})
+
+    # Without --table, no table is printed
+    mock_table.reset_mock()
+    main(["--nautilus"])
+    mock_table.assert_not_called()

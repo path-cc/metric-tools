@@ -14,6 +14,7 @@ import sys
 from typing import Optional
 
 from k8s import check_namespace_access, find_pelican_origin_pods
+from output import print_exports_table
 from pelican import get_exports_for_pod
 
 
@@ -88,6 +89,19 @@ def parse_args(
         "--verbose",
         action="store_true",
         help="Print progress messages to stderr",
+    )
+    parser.add_argument(
+        "--table",
+        action="store_true",
+        help="Print a table of exports to stdout after querying each cluster",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="Read data from FILE instead of querying clusters (may be given multiple times); implies --table",
     )
     args = parser.parse_args(argv)
 
@@ -255,7 +269,11 @@ def _process_namespace(
         if should_process:
             try:
                 if args.verbose:
-                    print(f"[{cluster_name}] {origin.pod_name}: Getting exports...", file=sys.stderr, flush=True)
+                    print(
+                        f"[{cluster_name}] {origin.pod_name}: Getting exports...",
+                        file=sys.stderr,
+                        flush=True,
+                    )
                 if prefix_pairs is not None:
                     # Matched Tiger/Tempest pod: run inner.py with scan mode
                     sitename, exports = get_exports_for_pod(
@@ -269,7 +287,11 @@ def _process_namespace(
                 ok = False
 
             if args.verbose:
-                print(f"[{cluster_name}] {origin.pod_name}: {'ok' if ok else 'FAIL'}", file=sys.stderr, flush=True)
+                print(
+                    f"[{cluster_name}] {origin.pod_name}: {'ok' if ok else 'FAIL'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             fh.write(
                 json.dumps(
                     {
@@ -287,7 +309,15 @@ def _process_namespace(
 
 
 def main(argv=None) -> int:
-    args, clusters, sub_ns_map, _collab_map = parse_args(argv)
+    args, clusters, sub_ns_map, collab_map = parse_args(argv)
+    table = args.table or bool(args.input)
+
+    if args.input:
+        for input_file in args.input:
+            if table:
+                print_exports_table(input_file, collab_map=collab_map)
+                sys.stdout.flush()
+        return 0
 
     for cluster_name, section in clusters:
         context = section["context"]
@@ -310,6 +340,10 @@ def main(argv=None) -> int:
                     cluster_count,
                     cluster_skipped,
                 )
+
+        if table:
+            print_exports_table(out_file, collab_map=collab_map)
+            sys.stdout.flush()
 
     return 0
 
