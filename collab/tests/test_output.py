@@ -127,10 +127,10 @@ def test_print_exports_table_with_collab_map(tmp_path, capsys):
         for entry in data:
             f.write(json.dumps(entry) + "\n")
 
-    collab_map = {"EHT": ["/EHT/public", "/EHT/private"]}
+    collab_ns_map = {"EHT": ["/EHT/public*", "/EHT/private*"]}
 
     # Collab column is prepended; unmatched prefix shows (unknown)
-    print_exports_table(str(jsonl_file), collab_map=collab_map)
+    print_exports_table(str(jsonl_file), collab_ns_map=collab_ns_map)
     captured = capsys.readouterr().out
     assert "collab" in captured
     assert "EHT" in captured
@@ -140,8 +140,8 @@ def test_print_exports_table_with_collab_map(tmp_path, capsys):
     # Sorted by collab then federation_prefix; '(' < 'E' in ASCII
     assert captured.index("(unknown)") < captured.index("EHT")
 
-    # Empty collab_map: collab column still present
-    print_exports_table(str(jsonl_file), collab_map={})
+    # Empty collab_ns_map: collab column still present
+    print_exports_table(str(jsonl_file), collab_ns_map={})
     captured = capsys.readouterr().out
     assert "collab" in captured
     assert "(unknown)" in captured
@@ -149,25 +149,28 @@ def test_print_exports_table_with_collab_map(tmp_path, capsys):
 
 
 def test_match_collab():
-    collab_map = {
-        "EHT": ["/EHT/public", "/EHT/private"],
-        "REDTOP": ["/REDTOP/public"],
+    collab_ns_map = {
+        "EHT": ["/EHT/public*", "/EHT/private*"],
+        "REDTOP": ["/REDTOP/public*"],
     }
 
-    # Exact prefix match
-    assert match_collab("/EHT/public", collab_map) == "EHT"
+    # Exact match (glob matches the path itself)
+    assert match_collab("/EHT/public", collab_ns_map) == "EHT"
 
-    # Sub-path match (prefix is a prefix of the federation path)
-    assert match_collab("/EHT/public/data/file.root", collab_map) == "EHT"
+    # Sub-path match via glob wildcard
+    assert match_collab("/EHT/public/data/file.root", collab_ns_map) == "EHT"
 
-    # Match on second prefix of same collab
-    assert match_collab("/EHT/private", collab_map) == "EHT"
+    # Match on second glob of same collab
+    assert match_collab("/EHT/private", collab_ns_map) == "EHT"
 
     # Match on different collab
-    assert match_collab("/REDTOP/public", collab_map) == "REDTOP"
+    assert match_collab("/REDTOP/public", collab_ns_map) == "REDTOP"
 
     # No match
-    assert match_collab("/ospool/uc-shared", collab_map) is None
+    assert match_collab("/ospool/uc-shared", collab_ns_map) is None
+
+    # Without wildcard, sub-path does not match
+    assert match_collab("/EHT/public/data", {"EHT": ["/EHT/public"]}) is None
 
     # Empty map
     assert match_collab("/EHT/public", {}) is None

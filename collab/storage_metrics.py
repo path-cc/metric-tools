@@ -22,7 +22,7 @@ from pelican import get_exports_for_pod
 class ConfigData(NamedTuple):
     clusters: list[tuple[str, configparser.SectionProxy]]
     sub_ns_map: dict[str, list[tuple[str, str]]]
-    collab_map: dict[str, list[str]]
+    collab_ns_map: dict[str, list[str]]
     exclude_ns_globs: list[str]
 
 
@@ -133,10 +133,10 @@ def read_config(args: argparse.Namespace) -> ConfigData:
         if prefix_pairs:
             sub_ns_map[section_name] = prefix_pairs
 
-    collab_map: dict[str, list[str]] = {}
-    if "collabs" in cfg:
-        for collab_name, prefixes_str in cfg["collabs"].items():
-            collab_map[collab_name] = prefixes_str.split()
+    collab_ns_map: dict[str, list[str]] = {}
+    if "collab_namespaces" in cfg:
+        for collab_name, globs_str in cfg["collab_namespaces"].items():
+            collab_ns_map[collab_name] = globs_str.split()
 
     exclude_ns_globs: list[str] = []
     if "exclude_namespaces" in cfg:
@@ -146,7 +146,7 @@ def read_config(args: argparse.Namespace) -> ConfigData:
     return ConfigData(
         clusters=clusters,
         sub_ns_map=sub_ns_map,
-        collab_map=collab_map,
+        collab_ns_map=collab_ns_map,
         exclude_ns_globs=exclude_ns_globs,
     )
 
@@ -310,7 +310,7 @@ def main(argv=None) -> int:
             if table:
                 print_exports_table(
                     input_file,
-                    collab_map=config.collab_map,
+                    collab_ns_map=config.collab_ns_map,
                     exclude_ns_globs=config.exclude_ns_globs,
                 )
                 sys.stdout.flush()
@@ -350,7 +350,7 @@ def main(argv=None) -> int:
         if table:
             print_exports_table(
                 out_file,
-                collab_map=config.collab_map,
+                collab_ns_map=config.collab_ns_map,
                 exclude_ns_globs=config.exclude_ns_globs,
             )
             sys.stdout.flush()

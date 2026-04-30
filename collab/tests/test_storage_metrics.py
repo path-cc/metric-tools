@@ -39,7 +39,7 @@ def test_read_config_clusters(tmp_path, monkeypatch):
     assert config.clusters[0][0] == "nautilus"
     assert config.clusters[1][0] == "tiger"
     assert isinstance(config.sub_ns_map, dict)
-    assert config.collab_map == {}
+    assert config.collab_ns_map == {}
     assert config.exclude_ns_globs == []
 
     # Single cluster flag: only that cluster
@@ -54,23 +54,23 @@ def test_read_config_collab_map(tmp_path, monkeypatch):
     config_file = tmp_path / "config.ini"
 
     # Single prefix per collab
-    config_file.write_text("[collabs]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n")
+    config_file.write_text("[collab_namespaces]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n")
     config = read_config(parse_args([]))
-    assert config.collab_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
+    assert config.collab_ns_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
 
     # Multiple space-separated prefixes
     config_file.write_text(
-        "[collabs]\nEvent_Horizon_Telescope = /EHT/public /EHT/private\n"
+        "[collab_namespaces]\nEvent_Horizon_Telescope = /EHT/public /EHT/private\n"
     )
     config = read_config(parse_args([]))
-    assert config.collab_map == {
+    assert config.collab_ns_map == {
         "Event_Horizon_Telescope": ["/EHT/public", "/EHT/private"]
     }
 
-    # Empty [collabs] section
-    config_file.write_text("[collabs]\n")
+    # Empty [collab_namespaces] section
+    config_file.write_text("[collab_namespaces]\n")
     config = read_config(parse_args([]))
-    assert config.collab_map == {}
+    assert config.collab_ns_map == {}
 
 
 def test_read_config_exclude_namespaces(tmp_path, monkeypatch):
@@ -175,7 +175,7 @@ def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
 
     # --table triggers print_exports_table after the cluster
     main(["--nautilus", "--table"])
-    mock_table.assert_called_once_with(out_file, collab_map={}, exclude_ns_globs=[])
+    mock_table.assert_called_once_with(out_file, collab_ns_map={}, exclude_ns_globs=[])
 
     # Without --table, no table is printed
     mock_table.reset_mock()

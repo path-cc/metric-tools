@@ -3,24 +3,24 @@ import json
 from typing import Optional
 
 
-def match_collab(fed_prefix: str, collab_map: dict[str, list[str]]) -> Optional[str]:
+def match_collab(fed_prefix: str, collab_ns_map: dict[str, list[str]]) -> Optional[str]:
     """
-    Return the collab name whose prefix list contains a startswith match, else None.
+    Return the collab name whose glob list fnmatch-matches fed_prefix, else None.
 
     Parameters
     ----------
     fed_prefix:
         The federation prefix to look up.
-    collab_map:
-        A mapping of collaboration name to list of prefixes.
+    collab_ns_map:
+        A mapping of collaboration name to list of fnmatch glob patterns.
 
     Returns
     -------
     str | None
         The name of the collaboration (if found), else None.
     """
-    for collab, patterns in collab_map.items():
-        if any(fed_prefix.startswith(p) for p in patterns):
+    for collab, patterns in collab_ns_map.items():
+        if any(fnmatch.fnmatch(fed_prefix, p) for p in patterns):
             return collab
     return None
 
@@ -29,7 +29,7 @@ def print_exports_table(
     data_path: str,
     *,
     si: bool = False,
-    collab_map: Optional[dict[str, list[str]]] = None,
+    collab_ns_map: Optional[dict[str, list[str]]] = None,
     exclude_ns_globs: Optional[list[str]] = None,
 ) -> None:
     """
@@ -45,15 +45,15 @@ def print_exports_table(
         Path to the data file to get the numbers from (e.g. ``"nautilus.jsonl"``).
     si:
         If True, display size in SI terabytes (10^12 bytes) instead of TiB (2^40 bytes).
-    collab_map:
-        A collaboration-to-namespace pattern mapping.
+    collab_ns_map:
+        A collaboration-to-namespace glob pattern mapping.
     exclude_ns_globs:
         Glob patterns for federation prefixes to silently exclude from the table.
     """
     divisor = 1e12 if si else 2**40
     size_header = "size (TB)" if si else "size (TiB)"
 
-    use_collab = bool(collab_map)
+    use_collab = bool(collab_ns_map)
     rows: list[tuple] = []
     with open(data_path) as fh:
         for line in fh:
@@ -72,8 +72,8 @@ def print_exports_table(
                 ):
                     continue
                 if use_collab:
-                    assert collab_map is not None  # shut the type checker up
-                    collab = match_collab(fed, collab_map) or "(unknown)"
+                    assert collab_ns_map is not None  # shut the type checker up
+                    collab = match_collab(fed, collab_ns_map) or "(unknown)"
                     rows.append((collab, fed, str(pub), f"{size / divisor:.2f}"))
                 else:
                     collab = "(unknown)"
