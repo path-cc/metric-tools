@@ -12,11 +12,18 @@ import configparser
 import fnmatch
 import json
 import sys
-from typing import Optional
+from typing import NamedTuple, Optional
 
 from k8s import check_namespace_access, find_pelican_origin_pods
 from output import print_exports_table
 from pelican import get_exports_for_pod
+
+
+class ConfigData(NamedTuple):
+    clusters: list[tuple[str, configparser.SectionProxy]]
+    sub_ns_map: dict[str, list[tuple[str, str]]]
+    collab_map: dict[str, list[str]]
+    exclude_ns_globs: list[str]
 
 
 def match_collab(fed_prefix: str, collab_map: dict[str, list[str]]) -> Optional[str]:
@@ -27,30 +34,8 @@ def match_collab(fed_prefix: str, collab_map: dict[str, list[str]]) -> Optional[
     return None
 
 
-def parse_args(
-    argv,
-) -> tuple[
-    argparse.Namespace,
-    list[tuple[str, configparser.SectionProxy]],
-    dict[str, list[tuple[str, str]]],
-    dict[str, list[str]],
-]:
-    """
-    Parse CLI arguments, validate them, read config.ini, and build the cluster list.
-
-    Returns
-    -------
-    args:
-        Parsed argument namespace.
-    clusters:
-        Ordered list of ``(cluster_name, config_section)`` pairs to process.
-    sub_ns_map:
-        Dict mapping section names like "CLUSTER:POD_PREFIX" to lists of
-        (storage_prefix, federation_prefix) tuples.
-    collab_map:
-        Dict mapping collab name to list of federation prefix patterns (from
-        the ``[collabs]`` config section).  Empty dict if the section is absent.
-    """
+def parse_args(argv) -> argparse.Namespace:
+    """Parse and validate CLI arguments."""
     parser = argparse.ArgumentParser(
         description="Collect Pelican Origin storage metrics from Kubernetes clusters."
     )
@@ -109,7 +94,11 @@ def parse_args(
     if args.s and args.pod:
         parser.error("-s and --pod are mutually exclusive")
 
-    # If no cluster flag is set, process all clusters
+    return args
+
+
+def read_config(args: argparse.Namespace) -> ConfigData:
+    """Read config.ini and return cluster list, prefix maps, and exclusion globs."""
     any_cluster = args.nautilus or args.tiger or args.tempest
     run_nautilus = args.nautilus or not any_cluster
     run_tiger = args.tiger or not any_cluster
@@ -140,16 +129,13 @@ def parse_args(
         section = cfg[section_name]
         prefix_pairs: list[tuple[str, str]] = []
 
-        # Parse numbered storage_prefix_N / federation_prefix_N pairs
         n = 1
         while True:
             storage_key = f"storage_prefix_{n}"
             federation_key = f"federation_prefix_{n}"
             if storage_key not in section or federation_key not in section:
                 break
-            storage_prefix = section[storage_key]
-            federation_prefix = section[federation_key]
-            prefix_pairs.append((storage_prefix, federation_prefix))
+            prefix_pairs.append((section[storage_key], section[federation_key]))
             n += 1
 
         if prefix_pairs:
@@ -160,7 +146,17 @@ def parse_args(
         for collab_name, prefixes_str in cfg["collabs"].items():
             collab_map[collab_name] = prefixes_str.split()
 
-    return args, clusters, sub_ns_map, collab_map
+    exclude_ns_globs: list[str] = []
+    if "exclude_namespaces" in cfg:
+        for _, globs_str in cfg["exclude_namespaces"].items():
+            exclude_ns_globs.extend(globs_str.split())
+
+    return ConfigData(
+        clusters=clusters,
+        sub_ns_map=sub_ns_map,
+        collab_map=collab_map,
+        exclude_ns_globs=exclude_ns_globs,
+    )
 
 
 def _get_sub_ns_prefixes(
@@ -311,17 +307,22 @@ def _process_namespace(
 
 
 def main(argv=None) -> int:
-    args, clusters, sub_ns_map, collab_map = parse_args(argv)
+    args = parse_args(argv)
+    config = read_config(args)
     table = args.table or bool(args.input)
 
     if args.input:
         for input_file in args.input:
             if table:
-                print_exports_table(input_file, collab_map=collab_map)
+                print_exports_table(
+                    input_file,
+                    collab_map=config.collab_map,
+                    exclude_ns_globs=config.exclude_ns_globs,
+                )
                 sys.stdout.flush()
         return 0
 
-    for cluster_name, section in clusters:
+    for cluster_name, section in config.clusters:
         context = section["context"]
         namespaces = section["namespaces"].split()
         out_file = section["file"]
@@ -341,7 +342,7 @@ def main(argv=None) -> int:
                     namespace,
                     fh,
                     args,
-                    sub_ns_map,
+                    config.sub_ns_map,
                     cluster_count,
                     cluster_skipped,
                     exclude_globs,
@@ -353,7 +354,11 @@ def main(argv=None) -> int:
             print(f"All pods for {cluster_name} skipped.", file=sys.stderr)
 
         if table:
-            print_exports_table(out_file, collab_map=collab_map)
+            print_exports_table(
+                out_file,
+                collab_map=config.collab_map,
+                exclude_ns_globs=config.exclude_ns_globs,
+            )
             sys.stdout.flush()
 
     return 0

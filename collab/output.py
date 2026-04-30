@@ -1,3 +1,4 @@
+import fnmatch
 import json
 from typing import Optional
 
@@ -29,12 +30,14 @@ def print_exports_table(
     *,
     si: bool = False,
     collab_map: Optional[dict[str, list[str]]] = None,
+    exclude_ns_globs: Optional[list[str]] = None,
 ) -> None:
     """
     Read a .jsonl file produced by this script and print a table of exports.
 
     Columns printed: federation_prefix, public, size (in TiB by default).
     Exports where any of those three fields is missing or null are skipped.
+    Exports whose federation_prefix matches any glob in exclude_ns_globs are silently omitted.
 
     Parameters
     ----------
@@ -44,6 +47,8 @@ def print_exports_table(
         If True, display size in SI terabytes (10^12 bytes) instead of TiB (2^40 bytes).
     collab_map:
         A collaboration-to-namespace pattern mapping.
+    exclude_ns_globs:
+        Glob patterns for federation prefixes to silently exclude from the table.
     """
     divisor = 1e12 if si else 2**40
     size_header = "size (TB)" if si else "size (TiB)"
@@ -61,6 +66,8 @@ def print_exports_table(
                 pub = exp.get("public")
                 size = exp.get("size")
                 if fed is None or pub is None or size is None:
+                    continue
+                if exclude_ns_globs and any(fnmatch.fnmatch(fed, g) for g in exclude_ns_globs):
                     continue
                 if use_collab:
                     assert collab_map is not None  # shut the type checker up

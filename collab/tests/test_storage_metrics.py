@@ -14,7 +14,7 @@ from k8s import (
 from output import match_collab, print_exports_table
 from pelican import get_exports_for_pod
 from s3 import get_s3_bucket_size
-from storage_metrics import _process_namespace, main, parse_args
+from storage_metrics import _process_namespace, main, parse_args, read_config
 
 # ---------------------------------------------------------------------------
 # Pure function tests - No mocks, testing logic directly
@@ -150,6 +150,45 @@ def test_print_exports_table(tmp_path, capsys):
     print_exports_table(str(jsonl_file))
     captured = capsys.readouterr().out
     assert "(no data)" in captured
+
+
+def test_print_exports_table_exclude_ns_globs(tmp_path, capsys):
+    jsonl_file = tmp_path / "test.jsonl"
+    data = [
+        {
+            "sitename": "site1",
+            "exports": [
+                {"federation_prefix": "/ospool/uc-shared/project/HepSim", "public": True, "size": 2**40},
+                {"federation_prefix": "/EHT/public", "public": True, "size": 2**39},
+                {"federation_prefix": "/ospool/uc-shared/project/REDTOP", "public": True, "size": 2**38},
+            ],
+        }
+    ]
+    with open(jsonl_file, "w") as f:
+        for entry in data:
+            f.write(json.dumps(entry) + "\n")
+
+    # Glob matching: HepSim and REDTOP excluded, EHT kept
+    print_exports_table(
+        str(jsonl_file),
+        exclude_ns_globs=["/ospool/uc-shared/*/HepSim", "/ospool/uc-shared/*/REDTOP"],
+    )
+    captured = capsys.readouterr().out
+    assert "/EHT/public" in captured
+    assert "HepSim" not in captured
+    assert "REDTOP" not in captured
+
+    # Empty exclude list: nothing excluded
+    print_exports_table(str(jsonl_file), exclude_ns_globs=[])
+    captured = capsys.readouterr().out
+    assert "/ospool/uc-shared/project/HepSim" in captured
+    assert "/EHT/public" in captured
+    assert "/ospool/uc-shared/project/REDTOP" in captured
+
+    # None exclude list: nothing excluded
+    print_exports_table(str(jsonl_file), exclude_ns_globs=None)
+    captured = capsys.readouterr().out
+    assert "/ospool/uc-shared/project/HepSim" in captured
 
 
 def test_print_exports_table_with_collab_map(tmp_path, capsys):
@@ -295,53 +334,97 @@ def test_get_exports_for_pod(mock_copy, mock_run_inner):
         get_exports_for_pod(origin)
 
 
-def test_parse_args(tmp_path, monkeypatch):
-    # Create config file with multiple clusters
-    monkeypatch.chdir(tmp_path)
-    config_file = tmp_path / "config.ini"
-    config_file.write_text("[nautilus]\ncontext = c1\n[tiger]\ncontext = c2\n")
-
-    # No cluster flags: runs all clusters present in config
-    args, clusters, sub_ns_map, collab_map = parse_args([])
-    assert len(clusters) == 2
-    assert clusters[0][0] == "nautilus"
-    assert clusters[1][0] == "tiger"
-    assert isinstance(sub_ns_map, dict)
-    assert collab_map == {}
+def test_parse_args():
+    # Default flags
+    args = parse_args([])
     assert args.verbose is False
     assert args.table is False
     assert args.input == []
+    assert args.nautilus is False
+    assert args.tiger is False
+    assert args.tempest is False
 
-    # Single cluster flag should only run that cluster
-    args, clusters, sub_ns_map, collab_map = parse_args(["--nautilus"])
-    assert len(clusters) == 1
-    assert clusters[0][0] == "nautilus"
+    # Cluster flags are set correctly
+    args = parse_args(["--nautilus"])
+    assert args.nautilus is True
+    assert args.tiger is False
 
     # -s and --pod together should raise parser error (mutually exclusive)
     with pytest.raises(SystemExit):
         parse_args(["-s", "10", "--pod", "some-pod"])
 
 
-def test_parse_args_collab_map(tmp_path, monkeypatch):
+def test_read_config_clusters(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_file = tmp_path / "config.ini"
+    config_file.write_text("[nautilus]\ncontext = c1\n[tiger]\ncontext = c2\n")
+
+    # No cluster flags: returns all clusters present in config
+    args = parse_args([])
+    config = read_config(args)
+    assert len(config.clusters) == 2
+    assert config.clusters[0][0] == "nautilus"
+    assert config.clusters[1][0] == "tiger"
+    assert isinstance(config.sub_ns_map, dict)
+    assert config.collab_map == {}
+    assert config.exclude_ns_globs == []
+
+    # Single cluster flag: only that cluster
+    args = parse_args(["--nautilus"])
+    config = read_config(args)
+    assert len(config.clusters) == 1
+    assert config.clusters[0][0] == "nautilus"
+
+
+def test_read_config_collab_map(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     config_file = tmp_path / "config.ini"
 
     # Single prefix per collab
     config_file.write_text("[collabs]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n")
-    _, _, _, collab_map = parse_args([])
-    assert collab_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
+    config = read_config(parse_args([]))
+    assert config.collab_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
 
     # Multiple space-separated prefixes
     config_file.write_text(
         "[collabs]\nEvent_Horizon_Telescope = /EHT/public /EHT/private\n"
     )
-    _, _, _, collab_map = parse_args([])
-    assert collab_map == {"Event_Horizon_Telescope": ["/EHT/public", "/EHT/private"]}
+    config = read_config(parse_args([]))
+    assert config.collab_map == {"Event_Horizon_Telescope": ["/EHT/public", "/EHT/private"]}
 
     # Empty [collabs] section
     config_file.write_text("[collabs]\n")
-    _, _, _, collab_map = parse_args([])
-    assert collab_map == {}
+    config = read_config(parse_args([]))
+    assert config.collab_map == {}
+
+
+def test_read_config_exclude_namespaces(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config_file = tmp_path / "config.ini"
+
+    # Absent section: empty list
+    config_file.write_text("")
+    config = read_config(parse_args([]))
+    assert config.exclude_ns_globs == []
+
+    # Single key with one glob
+    config_file.write_text("[exclude_namespaces]\nmigrated = /ospool/uc-shared/*/HepSim\n")
+    config = read_config(parse_args([]))
+    assert config.exclude_ns_globs == ["/ospool/uc-shared/*/HepSim"]
+
+    # Multiple keys and multiple space-separated globs per key: all collected flat
+    config_file.write_text(
+        "[exclude_namespaces]\n"
+        "migrated = /ospool/uc-shared/*/HepSim /ospool/uc-shared/*/REDTOP\n"
+        "untracked = /jkb-lab /ndp/*\n"
+    )
+    config = read_config(parse_args([]))
+    assert set(config.exclude_ns_globs) == {
+        "/ospool/uc-shared/*/HepSim",
+        "/ospool/uc-shared/*/REDTOP",
+        "/jkb-lab",
+        "/ndp/*",
+    }
 
 
 def test_match_collab():
@@ -440,7 +523,7 @@ def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
 
     # --table triggers print_exports_table after the cluster
     main(["--nautilus", "--table"])
-    mock_table.assert_called_once_with(out_file, collab_map={})
+    mock_table.assert_called_once_with(out_file, collab_map={}, exclude_ns_globs=[])
 
     # Without --table, no table is printed
     mock_table.reset_mock()
