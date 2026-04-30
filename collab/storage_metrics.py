@@ -12,10 +12,12 @@ import configparser
 import fnmatch
 import json
 import sys
+from collections import Counter
+from pathlib import Path
 from typing import NamedTuple, Optional
 
 from k8s import check_namespace_access, find_pelican_origin_pods
-from output import print_exports_table
+from output import print_collabs_summary, print_exports_table
 from pelican import get_exports_for_pod
 
 
@@ -72,6 +74,11 @@ def parse_args(argv) -> argparse.Namespace:
         "--table",
         action="store_true",
         help="Print a table of exports to stdout after querying each cluster",
+    )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a per-collaboration storage summary to stdout after querying each cluster",
     )
     parser.add_argument(
         "-i",
@@ -303,19 +310,36 @@ def _process_namespace(
 def main(argv=None) -> int:
     args = parse_args(argv)
     config = read_config(args)
-    table = args.table or bool(args.input)
+    imply_both = bool(args.input) and not args.table and not args.summary
+    show_table = args.table or imply_both
+    show_summary = args.summary or imply_both
 
     if args.input:
+        stems = Counter(Path(f).stem for f in args.input)
         for input_file in args.input:
-            if table:
+            if show_table:
+                stem = Path(input_file).stem
+                table_title = f"{stem.title()} Exports"
+                if stems[stem] > 1:
+                    table_title += f" ({input_file})"
                 print_exports_table(
                     input_file,
                     collab_ns_map=config.collab_ns_map,
                     exclude_ns_globs=config.exclude_ns_globs,
+                    title=table_title,
                 )
                 sys.stdout.flush()
+        if show_summary:
+            print_collabs_summary(
+                args.input,
+                config.collab_ns_map,
+                exclude_ns_globs=config.exclude_ns_globs,
+                title="Storage Utilization",
+            )
+            sys.stdout.flush()
         return 0
 
+    out_files = []
     for cluster_name, section in config.clusters:
         context = section["context"]
         namespaces = section["namespaces"].split()
@@ -347,13 +371,24 @@ def main(argv=None) -> int:
         if cluster_eligible > 0 and cluster_eligible == cluster_excluded:
             print(f"All pods for {cluster_name} skipped.", file=sys.stderr)
 
-        if table:
+        out_files.append(out_file)
+        if show_table:
             print_exports_table(
                 out_file,
                 collab_ns_map=config.collab_ns_map,
                 exclude_ns_globs=config.exclude_ns_globs,
+                title=f"{cluster_name.capitalize()} Exports",
             )
             sys.stdout.flush()
+
+    if show_summary:
+        print_collabs_summary(
+            out_files,
+            config.collab_ns_map,
+            exclude_ns_globs=config.exclude_ns_globs,
+            title="Storage Utilization",
+        )
+        sys.stdout.flush()
 
     return 0
 

@@ -1,5 +1,5 @@
 import argparse
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -12,6 +12,7 @@ def test_parse_args():
     args = parse_args([])
     assert args.verbose is False
     assert args.table is False
+    assert args.summary is False
     assert args.input == []
     assert args.nautilus is False
     assert args.tiger is False
@@ -145,8 +146,9 @@ def test_process_namespace_verbose(
     assert captured.out == ""
 
 
+@patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
-def test_main_input_flag(mock_table, tmp_path, monkeypatch):
+def test_main_input_flag(mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.ini").write_text(
         "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
@@ -156,16 +158,24 @@ def test_main_input_flag(mock_table, tmp_path, monkeypatch):
     f1.write_text("")
     f2.write_text("")
 
-    # -i alone prints one table per file; clusters are not queried
+    # -i alone implies both table and summary; clusters are not queried
+    # table is called once per file; summary is called once with all files combined
     main(["-i", str(f1), "-i", str(f2)])
     assert mock_table.call_count == 2
-    calls = [c[0][0] for c in mock_table.call_args_list]
-    assert calls == [str(f1), str(f2)]
+    assert mock_summary.call_count == 1
+    table_files = [c[0][0] for c in mock_table.call_args_list]
+    assert table_files == [str(f1), str(f2)]
+    assert mock_summary.call_args[0][0] == [str(f1), str(f2)]
+    # Titles derived from stems: f1="a", f2="b" — no duplicates, no path disambiguation
+    titles = [c[1]["title"] for c in mock_table.call_args_list]
+    assert titles == ["A Exports", "B Exports"]
+    assert mock_summary.call_args[1]["title"] == "Storage Utilization"
 
 
+@patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
+def test_main_table_flag(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -173,14 +183,103 @@ def test_main_table_flag(mock_process, mock_table, tmp_path, monkeypatch):
     )
     mock_process.return_value = (1, 0, 1, 0)
 
-    # --table triggers print_exports_table after the cluster
+    # --table triggers print_exports_table but NOT print_collabs_summary
     main(["--nautilus", "--table"])
-    mock_table.assert_called_once_with(out_file, collab_ns_map={}, exclude_ns_globs=[])
+    mock_table.assert_called_once_with(
+        out_file, collab_ns_map={}, exclude_ns_globs=[], title="Nautilus Exports"
+    )
+    mock_summary.assert_not_called()
 
-    # Without --table, no table is printed
+    # Without any flag, neither is printed
     mock_table.reset_mock()
+    mock_summary.reset_mock()
     main(["--nautilus"])
     mock_table.assert_not_called()
+    mock_summary.assert_not_called()
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
+def test_main_summary_flag(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out_file = str(tmp_path / "nautilus.jsonl")
+    (tmp_path / "config.ini").write_text(
+        f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\n"
+    )
+    mock_process.return_value = (1, 0, 1, 0)
+
+    # --summary triggers print_collabs_summary once (with list of out_files) but NOT print_exports_table
+    main(["--nautilus", "--summary"])
+    mock_summary.assert_called_once_with(
+        [out_file], {}, exclude_ns_globs=[], title="Storage Utilization"
+    )
+    mock_table.assert_not_called()
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+def test_main_input_flag_implies_both(mock_table, mock_summary, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
+    )
+    f = tmp_path / "data.jsonl"
+    f.write_text("")
+
+    # -i with --table explicitly: only table, not summary
+    main(["-i", str(f), "--table"])
+    mock_table.assert_called_once()
+    mock_summary.assert_not_called()
+
+    # -i with --summary explicitly: only summary (with list), not table
+    mock_table.reset_mock()
+    mock_summary.reset_mock()
+    main(["-i", str(f), "--summary"])
+    mock_summary.assert_called_once_with(
+        [str(f)], {}, exclude_ns_globs=[], title="Storage Utilization"
+    )
+    mock_table.assert_not_called()
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+def test_main_input_title_disambiguation(mock_table, mock_summary, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
+    )
+    # Two files with the same stem "data" in different directories
+    d1 = tmp_path / "dir1"
+    d2 = tmp_path / "dir2"
+    d1.mkdir()
+    d2.mkdir()
+    f1 = d1 / "data.jsonl"
+    f2 = d2 / "data.jsonl"
+    f1.write_text("")
+    f2.write_text("")
+
+    main(["-i", str(f1), "-i", str(f2), "--table"])
+    titles = [c[1]["title"] for c in mock_table.call_args_list]
+    # Duplicate stems → full path appended
+    assert titles[0] == f"Data Exports ({str(f1)})"
+    assert titles[1] == f"Data Exports ({str(f2)})"
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
+def test_main_cluster_title(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    out_file = str(tmp_path / "nautilus.jsonl")
+    (tmp_path / "config.ini").write_text(
+        f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\n"
+    )
+    mock_process.return_value = (1, 0, 1, 0)
+
+    main(["--nautilus", "--table", "--summary"])
+    assert mock_table.call_args[1]["title"] == "Nautilus Exports"
+    assert mock_summary.call_args[1]["title"] == "Storage Utilization"
 
 
 @patch("storage_metrics.get_exports_for_pod")
