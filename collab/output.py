@@ -67,7 +67,9 @@ def print_exports_table(
                 size = exp.get("size")
                 if fed is None or pub is None or size is None:
                     continue
-                if exclude_ns_globs and any(fnmatch.fnmatch(fed, g) for g in exclude_ns_globs):
+                if exclude_ns_globs and any(
+                    fnmatch.fnmatch(fed, g) for g in exclude_ns_globs
+                ):
                     continue
                 if use_collab:
                     assert collab_map is not None  # shut the type checker up

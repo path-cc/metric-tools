@@ -26,14 +26,6 @@ class ConfigData(NamedTuple):
     exclude_ns_globs: list[str]
 
 
-def match_collab(fed_prefix: str, collab_map: dict[str, list[str]]) -> Optional[str]:
-    """Return the collab name whose prefix list contains a startswith match, else None."""
-    for collab, patterns in collab_map.items():
-        if any(fed_prefix.startswith(p) for p in patterns):
-            return collab
-    return None
-
-
 def parse_args(argv) -> argparse.Namespace:
     """Parse and validate CLI arguments."""
     parser = argparse.ArgumentParser(
@@ -228,7 +220,9 @@ def _process_origin(
             flush=True,
         )
     fh.write(
-        json.dumps({"origin": origin.deployment, "exports": exports, "sitename": sitename})
+        json.dumps(
+            {"origin": origin.deployment, "exports": exports, "sitename": sitename}
+        )
         + "\n"
     )
     fh.flush()
