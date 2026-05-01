@@ -108,14 +108,15 @@ def print_exports_table(
             collab = match_collab(fed, collab_ns_map) or "(unknown)"
         else:
             collab = "(unknown)"
-        rows.append((collab, fed, str(pub), f"{size / divisor:.2f}"))
+        access = "public" if pub else "auth"
+        rows.append((collab, fed, access, f"{size / divisor:.2f}"))
 
     if not rows:
         print("(no data)\n")
         return
 
     rows.sort(key=lambda r: (r[0], r[1]))
-    headers = ("collab", "federation_prefix", "public", size_header)
+    headers = ("collab", "federation_prefix", "access", size_header)
     col_widths = [
         max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)
     ]
@@ -164,11 +165,11 @@ def print_collabs_summary(
     divisor = 1e12 if si else 2**40
     unit = "TB" if si else "TiB"
     pub_header = f"public ({unit})"
-    priv_header = f"private ({unit})"
+    auth_header = f"auth ({unit})"
 
-    totals: dict[str, list[int]] = {}  # collab -> [pub_bytes, priv_bytes]
+    totals: dict[str, list[int]] = {}  # collab -> [pub_bytes, auth_bytes]
     unknown_pub: int = 0
-    unknown_priv: int = 0
+    unknown_auth: int = 0
     unmatched: set[str] = set()
 
     for data_path in data_paths:
@@ -182,7 +183,7 @@ def print_collabs_summary(
                 if pub:
                     unknown_pub += size
                 else:
-                    unknown_priv += size
+                    unknown_auth += size
             else:
                 if collab not in totals:
                     totals[collab] = [0, 0]
@@ -196,19 +197,19 @@ def print_collabs_summary(
         return
 
     rows = [
-        (collab, f"{pub / divisor:.2f}", f"{priv / divisor:.2f}")
-        for collab, (pub, priv) in sorted(totals.items())
+        (collab, f"{auth / divisor:.2f}", f"{pub / divisor:.2f}")
+        for collab, (pub, auth) in sorted(totals.items())
     ]
     if unmatched:
         rows.append(
             (
                 "(unknown)",
+                f"{unknown_auth / divisor:.2f}",
                 f"{unknown_pub / divisor:.2f}",
-                f"{unknown_priv / divisor:.2f}",
             )
         )
 
-    headers = ("collab", pub_header, priv_header)
+    headers = ("collab", auth_header, pub_header)
     col_widths = [
         max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)
     ]

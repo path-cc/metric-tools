@@ -70,9 +70,10 @@ def test_print_exports_table_deduplication(tmp_path, capsys):
 
     print_exports_table(str(jsonl_file))
     captured = capsys.readouterr().out
+    assert "access" in captured
     lines = [l for l in captured.splitlines() if "/ndp" in l]
     assert len(lines) == 1  # only one row for /ndp
-    assert "True" in lines[0]  # last-wins: public=True
+    assert "public" in lines[0]  # last-wins: public=True -> "public"
     # size 200 bytes / 2^40 rounds to 0.00 — just check /ndp appears once
     assert captured.count("/ndp") == 1
 
@@ -234,11 +235,11 @@ def test_print_collabs_summary_basic(tmp_path, capsys):
 
     assert "collab" in captured
     assert "public (TiB)" in captured
-    assert "private (TiB)" in captured
+    assert "auth (TiB)" in captured
     assert "EHT" in captured
     assert "2.00" in captured  # 2 * 2^40 public for EHT
     assert "(unknown)" in captured
-    assert "0.50" in captured  # 2^39 private for unknown
+    assert "0.50" in captured  # 2^39 auth for unknown
     assert "Unmatched federation prefixes:" in captured
     assert "/ospool/other" in captured
 
@@ -350,7 +351,7 @@ def test_print_collabs_summary_si(tmp_path, capsys):
     print_collabs_summary([str(jsonl_file)], {"EHT": ["/EHT/public*"]}, si=True)
     captured = capsys.readouterr().out
     assert "public (TB)" in captured
-    assert "private (TB)" in captured
+    assert "auth (TB)" in captured
     assert "1.00" in captured
 
 
@@ -465,5 +466,5 @@ def test_print_collabs_summary_right_aligned(tmp_path, capsys):
     data_line = next(l for l in lines if "EHT" in l and "(" not in l)
     # The numeric value in the public column should end at or before pub_col_end
     tokens = data_line.split()
-    assert tokens[1] == "1.00"  # public
-    assert tokens[2] == "0.50"  # private
+    assert tokens[1] == "0.50"  # auth
+    assert tokens[2] == "1.00"  # public
