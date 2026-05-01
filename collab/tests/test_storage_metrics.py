@@ -11,8 +11,8 @@ def test_parse_args():
     # Default flags
     args = parse_args([])
     assert args.verbose is False
-    assert args.table is False
-    assert args.summary is False
+    assert args.no_exports is False
+    assert args.no_summary is False
     assert args.input == []
     assert args.nautilus is False
     assert args.tiger is False
@@ -22,6 +22,11 @@ def test_parse_args():
     args = parse_args(["--nautilus"])
     assert args.nautilus is True
     assert args.tiger is False
+
+    # New flags
+    args = parse_args(["--no-exports", "--no-summary"])
+    assert args.no_exports is True
+    assert args.no_summary is True
 
     # -s and --pod together should raise parser error (mutually exclusive)
     with pytest.raises(SystemExit):
@@ -175,7 +180,7 @@ def test_main_input_flag(mock_table, mock_summary, tmp_path, monkeypatch):
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_table_flag(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_default_behavior(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -183,25 +188,20 @@ def test_main_table_flag(mock_process, mock_table, mock_summary, tmp_path, monke
     )
     mock_process.return_value = (1, 0, 1, 0)
 
-    # --table triggers print_exports_table but NOT print_collabs_summary
-    main(["--nautilus", "--table"])
+    # Without any flag, both are printed
+    main(["--nautilus"])
     mock_table.assert_called_once_with(
         out_file, collab_ns_map={}, exclude_ns_globs=[], title="Nautilus Exports"
     )
-    mock_summary.assert_not_called()
-
-    # Without any flag, neither is printed
-    mock_table.reset_mock()
-    mock_summary.reset_mock()
-    main(["--nautilus"])
-    mock_table.assert_not_called()
-    mock_summary.assert_not_called()
+    mock_summary.assert_called_once_with(
+        [out_file], {}, exclude_ns_globs=[], title="Storage Utilization"
+    )
 
 
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_summary_flag(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_no_flags(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -209,17 +209,29 @@ def test_main_summary_flag(mock_process, mock_table, mock_summary, tmp_path, mon
     )
     mock_process.return_value = (1, 0, 1, 0)
 
-    # --summary triggers print_collabs_summary once (with list of out_files) but NOT print_exports_table
-    main(["--nautilus", "--summary"])
-    mock_summary.assert_called_once_with(
-        [out_file], {}, exclude_ns_globs=[], title="Storage Utilization"
-    )
+    # --no-exports suppresses table but NOT summary
+    main(["--nautilus", "--no-exports"])
     mock_table.assert_not_called()
+    mock_summary.assert_called_once()
+
+    # --no-summary suppresses summary but NOT table
+    mock_table.reset_mock()
+    mock_summary.reset_mock()
+    main(["--nautilus", "--no-summary"])
+    mock_table.assert_called_once()
+    mock_summary.assert_not_called()
+
+    # Both "no" flags suppress both
+    mock_table.reset_mock()
+    mock_summary.reset_mock()
+    main(["--nautilus", "--no-exports", "--no-summary"])
+    mock_table.assert_not_called()
+    mock_summary.assert_not_called()
 
 
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
-def test_main_input_flag_implies_both(mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_input_flag_defaults(mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.ini").write_text(
         "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
@@ -227,19 +239,41 @@ def test_main_input_flag_implies_both(mock_table, mock_summary, tmp_path, monkey
     f = tmp_path / "data.jsonl"
     f.write_text("")
 
-    # -i with --table explicitly: only table, not summary
-    main(["-i", str(f), "--table"])
+    # -i with no other flags: both table and summary
+    main(["-i", str(f)])
+    mock_table.assert_called_once()
+    mock_summary.assert_called_once()
+
+    # -i with --no-exports explicitly: only summary, not table
+    mock_table.reset_mock()
+    mock_summary.reset_mock()
+    main(["-i", str(f), "--no-exports"])
+    mock_table.assert_not_called()
+    mock_summary.assert_called_once()
+
+    # -i with --no-summary explicitly: only table, not summary
+    mock_table.reset_mock()
+    mock_summary.reset_mock()
+    main(["-i", str(f), "--no-summary"])
     mock_table.assert_called_once()
     mock_summary.assert_not_called()
 
-    # -i with --summary explicitly: only summary (with list), not table
-    mock_table.reset_mock()
-    mock_summary.reset_mock()
-    main(["-i", str(f), "--summary"])
-    mock_summary.assert_called_once_with(
-        [str(f)], {}, exclude_ns_globs=[], title="Storage Utilization"
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+def test_main_nothing_to_do(mock_table, mock_summary, tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
     )
+    f = tmp_path / "data.jsonl"
+    f.write_text("")
+
+    # -i with both --no flags: "Nothing to do"
+    assert main(["-i", str(f), "--no-exports", "--no-summary"]) == 0
+    assert "Nothing to do" in capsys.readouterr().out
     mock_table.assert_not_called()
+    mock_summary.assert_not_called()
 
 
 @patch("storage_metrics.print_collabs_summary")
@@ -259,7 +293,7 @@ def test_main_input_title_disambiguation(mock_table, mock_summary, tmp_path, mon
     f1.write_text("")
     f2.write_text("")
 
-    main(["-i", str(f1), "-i", str(f2), "--table"])
+    main(["-i", str(f1), "-i", str(f2)])
     titles = [c[1]["title"] for c in mock_table.call_args_list]
     # Duplicate stems → full path appended
     assert titles[0] == f"Data Exports ({str(f1)})"
@@ -277,7 +311,7 @@ def test_main_cluster_title(mock_process, mock_table, mock_summary, tmp_path, mo
     )
     mock_process.return_value = (1, 0, 1, 0)
 
-    main(["--nautilus", "--table", "--summary"])
+    main(["--nautilus"])
     assert mock_table.call_args[1]["title"] == "Nautilus Exports"
     assert mock_summary.call_args[1]["title"] == "Storage Utilization"
 

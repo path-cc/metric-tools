@@ -71,14 +71,14 @@ def parse_args(argv) -> argparse.Namespace:
         help="Print progress messages to stderr",
     )
     parser.add_argument(
-        "--table",
+        "--no-exports",
         action="store_true",
-        help="Print a table of exports to stdout after querying each cluster",
+        help="Do not print the exports tables",
     )
     parser.add_argument(
-        "--summary",
+        "--no-summary",
         action="store_true",
-        help="Print a per-collaboration storage summary to stdout after querying each cluster",
+        help="Do not print the per-collaboration storage summary",
     )
     parser.add_argument(
         "-i",
@@ -86,7 +86,7 @@ def parse_args(argv) -> argparse.Namespace:
         action="append",
         default=[],
         metavar="FILE",
-        help="Read data from FILE instead of querying clusters (may be given multiple times); implies --table",
+        help="Read data from FILE instead of querying clusters (may be given multiple times)",
     )
     args = parser.parse_args(argv)
 
@@ -310,11 +310,14 @@ def _process_namespace(
 def main(argv=None) -> int:
     args = parse_args(argv)
     config = read_config(args)
-    imply_both = bool(args.input) and not args.table and not args.summary
-    show_table = args.table or imply_both
-    show_summary = args.summary or imply_both
+    show_table = not args.no_exports
+    show_summary = not args.no_summary
 
     if args.input:
+        if not show_table and not show_summary:
+            print("Nothing to do")
+            return 0
+
         stems = Counter(Path(f).stem for f in args.input)
         for input_file in args.input:
             if show_table:
