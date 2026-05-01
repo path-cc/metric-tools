@@ -176,7 +176,7 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
 
 def get_exports_for_pod(
     origin: Origin, prefix_pairs: Optional[list[tuple[str, str]]] = None
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], str]:
     """
     Copy ``inner.py`` into *origin*, run it, and return the sitename and exports.
 
@@ -206,10 +206,13 @@ def get_exports_for_pod(
 
     Returns
     -------
-    tuple[str, list[dict]]
-        ``(sitename, exports)`` where *sitename* is the origin's reported site
-        name and *exports* is the list of export dicts (empty list for unknown
-        storage types).
+    str
+        The site name reported by the origin.
+    list[dict]
+        The list of export dicts (empty list for unknown storage types).
+    time
+        The ISO8601 timestamp of the data gather time (as reported
+        by the inner script).
 
     Raises
     ------
@@ -237,4 +240,4 @@ def get_exports_for_pod(
             file=sys.stderr,
         )
         exports = []
-    return result['sitename'], exports
+    return result['sitename'], exports, result['time']

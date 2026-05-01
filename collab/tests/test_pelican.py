@@ -17,10 +17,12 @@ def test_get_exports_for_pod(mock_copy, mock_run_inner):
         "sitename": "site-posix",
         "storagetype": "posix",
         "posix": {"exports": [{"path": "/p1"}]},
+        "time": "2023-01-01T00:00:00Z",
     }
-    sitename, exports = get_exports_for_pod(origin)
+    sitename, exports, time_str = get_exports_for_pod(origin)
     assert sitename == "site-posix"
     assert exports == [{"path": "/p1"}]
+    assert time_str == "2023-01-01T00:00:00Z"
 
     # S3 storage type should extract s3.exports
     mock_run_inner.return_value = {
@@ -28,20 +30,24 @@ def test_get_exports_for_pod(mock_copy, mock_run_inner):
         "sitename": "site-s3",
         "storagetype": "s3",
         "s3": {"exports": [{"bucket": "b1"}]},
+        "time": "2023-01-01T00:00:00Z",
     }
-    sitename, exports = get_exports_for_pod(origin)
+    sitename, exports, time_str = get_exports_for_pod(origin)
     assert sitename == "site-s3"
     assert exports == [{"bucket": "b1"}]
+    assert time_str == "2023-01-01T00:00:00Z"
 
     # Unknown storage type should return empty exports
     mock_run_inner.return_value = {
         "status": "ok",
         "sitename": "site-unknown",
         "storagetype": "unknown",
+        "time": "2023-01-01T00:00:00Z",
     }
-    sitename, exports = get_exports_for_pod(origin)
+    sitename, exports, time_str = get_exports_for_pod(origin)
     assert sitename == "site-unknown"
     assert exports == []
+    assert time_str == "2023-01-01T00:00:00Z"
 
     # Error status in response should raise InnerScriptError
     mock_run_inner.return_value = {"status": "error", "error": "some error"}

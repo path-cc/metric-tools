@@ -9,6 +9,7 @@ then locates the Pelican Server binary inside each such container.
 
 import argparse
 import configparser
+import datetime
 import fnmatch
 import json
 import sys
@@ -104,7 +105,8 @@ def read_config(args: argparse.Namespace) -> ConfigData:
     run_tempest = args.tempest or not any_cluster
 
     cfg = configparser.ConfigParser()
-    cfg.optionxform = str  # preserve key case
+    # preserve key case:
+    cfg.optionxform = str  # type:ignore
     cfg.read("config.ini")
 
     clusters = []
@@ -204,6 +206,7 @@ def _process_origin(
     """Fetch exports for one origin and append the result to *fh*."""
     exports = None
     sitename = None
+    time_str = None
     ok = True
     try:
         if args.verbose:
@@ -213,9 +216,9 @@ def _process_origin(
                 flush=True,
             )
         if prefix_pairs is not None:
-            sitename, exports = get_exports_for_pod(origin, prefix_pairs=prefix_pairs)
+            sitename, exports, time_str = get_exports_for_pod(origin, prefix_pairs=prefix_pairs)
         else:
-            sitename, exports = get_exports_for_pod(origin)
+            sitename, exports, time_str = get_exports_for_pod(origin)
     except Exception as err:
         print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
         ok = False
@@ -226,9 +229,15 @@ def _process_origin(
             file=sys.stderr,
             flush=True,
         )
+
     fh.write(
         json.dumps(
-            {"origin": origin.deployment, "exports": exports, "sitename": sitename}
+            {
+                "origin": origin.deployment,
+                "exports": exports,
+                "sitename": sitename,
+                "time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
         )
         + "\n"
     )

@@ -1,10 +1,18 @@
 import argparse
+import datetime
+import json
 from unittest.mock import call, patch
 
 import pytest
 
 from collab_types import Origin
-from storage_metrics import _process_namespace, main, parse_args, read_config
+from storage_metrics import (
+    _process_namespace,
+    _process_origin,
+    main,
+    parse_args,
+    read_config,
+)
 
 
 def test_parse_args():
@@ -124,7 +132,7 @@ def test_process_namespace_verbose(
         context="ctx",
     )
     mock_find.return_value = [origin]
-    mock_exports.return_value = ("site1", [])
+    mock_exports.return_value = ("site1", [], "2023-01-01T00:00:00Z")
 
     sub_ns_map = {
         "tiger:collab-shared-osdf-pelican-origin": [
@@ -381,3 +389,55 @@ def test_main_all_pods_skipped(mock_process, mock_table, tmp_path, monkeypatch, 
     mock_process.return_value = (0, 0, 0, 0)
     main(["--nautilus"])
     assert "All pods for nautilus skipped." not in capsys.readouterr().err
+
+
+def test_process_origin_adds_date(tmp_path):
+    origin = Origin(
+        namespace="ns",
+        pod_name="dep-abc-123",
+        container_name="c",
+        context="ctx",
+    )
+    args = argparse.Namespace(verbose=False)
+    out_file = tmp_path / "out.jsonl"
+
+    with patch("storage_metrics.get_exports_for_pod") as mock_get:
+        mock_get.return_value = ("site", [{"federation_prefix": "/f", "size": 100}], "2023-01-01T00:00:00Z")
+        with open(out_file, "w") as fh:
+            _process_origin("cluster", origin, None, fh, args)
+
+    with open(out_file) as fh:
+        line = fh.readline()
+        data = json.loads(line)
+        assert "time" in data
+        assert data["origin"] == "dep"
+        # Check ISO8601 format: parseable by datetime.fromisoformat
+        date_str = data["time"]
+        dt = datetime.datetime.fromisoformat(date_str)
+        assert dt is not None
+
+
+def test_process_origin_adds_date_on_failure(tmp_path):
+    origin = Origin(
+        namespace="ns",
+        pod_name="dep-abc-123",
+        container_name="c",
+        context="ctx",
+    )
+    args = argparse.Namespace(verbose=False)
+    out_file = tmp_path / "out.jsonl"
+
+    with patch("storage_metrics.get_exports_for_pod") as mock_get:
+        mock_get.side_effect = Exception("failed")
+        with open(out_file, "w") as fh:
+            _process_origin("cluster", origin, None, fh, args)
+
+    with open(out_file) as fh:
+        line = fh.readline()
+        data = json.loads(line)
+        assert data["time"] is not None
+        assert data["origin"] == "dep"
+        assert data["exports"] is None
+        dt = datetime.datetime.fromisoformat(data["time"])
+        assert dt is not None
+

@@ -383,7 +383,7 @@ def main(argv=()):
             return 1
 
     finally:
-        result['time'] = datetime.datetime.now().isoformat(timespec='seconds')
+        result['time'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         json.dump(result, sys.stdout)
         sys.stdout.flush()
 
