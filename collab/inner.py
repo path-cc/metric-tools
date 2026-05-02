@@ -1,5 +1,76 @@
 #!/usr/bin/env python3
+"""
+Inner script for reporting exported volumes in a Pelican Origin and their
+sizes.  Queries the Pelican Origin config for export information
+(Federation Prefix, Storage Prefix, various S3 info) and prints it to
+stdout as JSON.
 
+Has three modes:
+
+- POSIX mode: for Origins with StorageType "posix", returns the size of the
+  exported directories by measuring them with `du` or CephFS's `ceph.dir.rbytes`
+  xattr.
+
+- Scan mode: similar to POSIX mode but scans subdirectories of the export
+  directories based on a provided list of storage:federation prefix mappings
+  for cases where different subdirectories of the storage prefix belong to
+  "subnamespaces" in the federation that are owned by different collaborations
+  and so should be counted separately.
+
+- S3 mode: for Origins with StorageType "s3", does not return sizes (since
+  we don't have a way to get them from within the pod), but returns the list
+  of exported buckets and S3 connection info (service URL, region, endpoint,
+  keys) in the config.
+
+  **Note:** This does print private information to stdout; it's up to the
+  caller to handle that securely.
+
+Usage:
+
+    POSIX/S3 mode:
+
+        inner.py
+
+    Scan mode:
+
+        inner.py scan <storage_prefix1>:<federation_prefix1> <storage_prefix2>:<federation_prefix2> ...
+
+
+The output JSON has the following shape:
+{
+    "status": "ok" or "error",
+    "error": "error message if status is error, else empty string",
+    "sitename": Xrootd.SiteName from config,
+    "storagetype": Origin.StorageType from config,
+    "posix": {  // POSIX or Scan mode only, otherwise null
+        "exports": [
+            {
+                "storage_prefix": ...,
+                "federation_prefix": ...,
+                "public": ...,
+                "size": ...,
+                "error": ...,
+            },
+            ...
+        ]
+    },
+    "s3": {  // S3 only, otherwise null
+        "serviceurl": ...,
+        "region": ...,
+        "accesskey": ...,
+        "secretkey": ...,
+        "exports": [
+            {
+                "s3bucket": ...,
+                "federation_prefix": ...,
+                "public": ...,
+            },
+            ...
+        ]
+    },
+    "time": Timestamp of the data gather time in ISO8601 format (e.g. "2023-01-01T00:00:00Z")
+}
+"""
 
 import dataclasses
 import datetime
@@ -24,6 +95,7 @@ class Export:
 
 
 def get_binary_name() -> str:
+    """Return the first available Pelican/OSDF CLI binary name in PATH."""
     return (
         os.popen(
             "command -v pelican-server 2>/dev/null || command -v osdf-server 2>/dev/null || command -v pelican 2>/dev/null"
@@ -242,6 +314,7 @@ def handle_posix(origin_config: dict, result: dict) -> None:
             ), "POSIX export missing storage_prefix (should have been caught)"
             export.size = get_dir_bytes(export.storage_prefix)
         except Exception as err:
+            # Keep collecting data for other exports even if one path fails.
             print(
                 f"{export.storage_prefix}: Error getting size: {err}",
                 file=sys.stderr,
@@ -261,7 +334,7 @@ def _read_key_file(path: str, label: str) -> Optional[str]:
 
 
 def handle_s3(origin_config: dict, result: dict) -> None:
-    """Populate result['s3'] with connection info and exports."""
+    """Populate ``result['s3']`` with connection metadata and export buckets."""
     result['s3']['serviceurl'] = origin_config.get("S3ServiceURL", None)
     result['s3']['region'] = origin_config.get("S3Region", None)
     access_key_file = origin_config.get("S3AccessKeyFile", None)
@@ -275,7 +348,14 @@ def handle_s3(origin_config: dict, result: dict) -> None:
 
 
 def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None:
-    """Implement scan mode: list subdirs of provided storage prefixes."""
+    """
+    Implement scan mode by crawling subdirectories of the export directories
+    based on provided storage:federation prefix mappings.
+
+    Each scan argument uses ``storage_root:federation_root`` format.  They
+    are both absolute paths that should be subdirectories of the
+    StoragePrefixes and FederationPrefixes in the Origin config.
+    """
     # To determine public/private, we need the existing POSIX exports for longest-prefix matching
     known_exports = get_posix_export_dirs(origin_config)
     scanned_exports: list[Export] = []
@@ -287,27 +367,11 @@ def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None
                 file=sys.stderr,
             )
             continue
-        storage_root, _, federation_root = arg.partition(":")
-        storage_root = storage_root.rstrip("/")
-        federation_root = federation_root.rstrip("/")
+        storage_root, federation_root, match_public = (
+            resolve_storage_federation_mapping(known_exports, arg)
+        )
 
-        # Determine public/private via longest prefix match on storage_root
-        match_public = False
-        match_found = False
-        best_len = -1
-        for ex in known_exports:
-            if ex.storage_prefix and storage_root.startswith(ex.storage_prefix):
-                if len(ex.storage_prefix) > best_len:
-                    best_len = len(ex.storage_prefix)
-                    match_public = ex.public
-                    match_found = True
-
-        if not match_found:
-            print(
-                f"Warning: No matching export found for {storage_root}; defaulting to private",
-                file=sys.stderr,
-            )
-
+        # Now go through the top level of storage_root
         with os.scandir(storage_root) as it:
             for entry in it:
                 if not entry.is_dir():
@@ -337,7 +401,38 @@ def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None
     result['storagetype'] = "posix"
 
 
+def resolve_storage_federation_mapping(known_exports, arg):
+    """
+    Split out the storage_root and federation_root from the scan argument,
+    and determine whether it's public or private based on longest prefix
+    match of the federation root against the known exports.
+    """
+    storage_root, _, federation_root = arg.partition(":")
+    storage_root = storage_root.rstrip("/")
+    federation_root = federation_root.rstrip("/")
+
+    match_public = False
+    match_found = False
+    best_len = -1
+    for ex in known_exports:
+        if ex.federation_prefix and federation_root.startswith(ex.federation_prefix):
+            if len(ex.federation_prefix) > best_len:
+                best_len = len(ex.federation_prefix)
+                match_public = ex.public
+                match_found = True
+
+    if not match_found:
+        raise RuntimeError(
+            f"Invalid mapping {arg} -- no matching export found for "
+            f"scan path {federation_root}; it must be a subpath of a "
+            "configured export prefix"
+        )
+
+    return storage_root, federation_root, match_public
+
+
 def main(argv=()):
+    """Run mode dispatch, always emit a JSON result payload, and return exit code."""
     argv = argv or sys.argv
 
     result = {
@@ -358,6 +453,8 @@ def main(argv=()):
 
     try:
         try:
+            # Validate config first so downstream handlers can rely on required
+            # values being present.
             origin_config, result['sitename'], result['storagetype'] = (
                 get_required_config()
             )
@@ -371,6 +468,7 @@ def main(argv=()):
             return 1
 
         try:
+            # Explicit scan arg takes precedence over configured storage type.
             if len(argv) > 1 and argv[1] == "scan":
                 handle_scan(origin_config, result, argv[2:])
             elif result['storagetype'] == "posix":
@@ -383,6 +481,8 @@ def main(argv=()):
             return 1
 
     finally:
+        # Emit timestamp and JSON even on failure so callers always receive a
+        # machine-readable status payload.
         result['time'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         json.dump(result, sys.stdout)
         sys.stdout.flush()
