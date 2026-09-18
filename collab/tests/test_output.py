@@ -328,6 +328,39 @@ def test_print_collabs_summary_basic(tmp_path, capsys):
     assert "/ospool/other" in captured
 
 
+def test_print_collabs_summary_lists_collabs_without_data(tmp_path, capsys):
+    jsonl_file = tmp_path / "test.jsonl"
+    jsonl_file.write_text(
+        json.dumps(
+            {
+                "time": _FIXTURE_TIME,
+                "exports": [
+                    {"federation_prefix": "/EHT/public", "public": True, "size": 2**40},
+                    {"federation_prefix": "/unmatched", "public": True, "size": 2**40},
+                ],
+            }
+        )
+        + "\n"
+    )
+
+    print_collabs_summary(
+        [str(jsonl_file)],
+        {
+            "EHT": ["/EHT/*"],
+            "LIGO": ["/LIGO/*"],
+            "XENON": ["/XENON/*"],
+        },
+    )
+    captured = capsys.readouterr().out
+
+    assert "Unmatched federation prefixes:" in captured
+    assert captured.index("Unmatched federation prefixes:") < captured.index(
+        "Collabs with no data:"
+    )
+    missing_section = captured.split("Collabs with no data:\n", maxsplit=1)[1]
+    assert missing_section.splitlines() == ["  LIGO", "  XENON"]
+
+
 def test_print_collabs_summary_public_private_split(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [

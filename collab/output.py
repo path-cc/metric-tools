@@ -168,7 +168,8 @@ def print_collabs_summary(
 
     Aggregates export sizes by collaboration (via match_collab), tracking public and
     private bytes separately. Prints a three-column table sorted alphabetically with an
-    (unknown) row at the bottom for unmatched prefixes, then lists each unmatched prefix.
+    (unknown) row at the bottom for unmatched prefixes, then lists each unmatched prefix
+    followed by configured collaborations that have no matching data.
 
     Within each file, the same federation_prefix is deduplicated (last entry wins).
     Prefixes from different files are summed independently.
@@ -220,35 +221,40 @@ def print_collabs_summary(
 
     if not totals and not unmatched:
         print("(no data)\n")
-        return
-
-    rows = [
-        (collab, f"{auth / divisor:.2f}", f"{pub / divisor:.2f}")
-        for collab, (pub, auth) in sorted(totals.items())
-    ]
-    if unmatched:
-        rows.append(
-            (
-                "(unknown)",
-                f"{unknown_auth / divisor:.2f}",
-                f"{unknown_pub / divisor:.2f}",
+    else:
+        rows = [
+            (collab, f"{auth / divisor:.2f}", f"{pub / divisor:.2f}")
+            for collab, (pub, auth) in sorted(totals.items())
+        ]
+        if unmatched:
+            rows.append(
+                (
+                    "(unknown)",
+                    f"{unknown_auth / divisor:.2f}",
+                    f"{unknown_pub / divisor:.2f}",
+                )
             )
-        )
 
-    headers = ("collab", auth_header, pub_header)
-    col_widths = [
-        max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)
-    ]
-    alignments = ["<", ">", ">"]
-    fmt = "  ".join(f"{{:{a}{w}}}" for a, w in zip(alignments, col_widths))
-    sep = "  ".join("-" * w for w in col_widths)
-    print(fmt.format(*headers))
-    print(sep)
-    for row in rows:
-        print(fmt.format(*row))
-    print()
+        headers = ("collab", auth_header, pub_header)
+        col_widths = [
+            max(len(h), max(len(r[i]) for r in rows)) for i, h in enumerate(headers)
+        ]
+        alignments = ["<", ">", ">"]
+        fmt = "  ".join(f"{{:{a}{w}}}" for a, w in zip(alignments, col_widths))
+        sep = "  ".join("-" * w for w in col_widths)
+        print(fmt.format(*headers))
+        print(sep)
+        for row in rows:
+            print(fmt.format(*row))
+        print()
 
     if unmatched:
         print("Unmatched federation prefixes:")
         for prefix in sorted(unmatched):
             print(f"  {prefix}")
+
+    missing_collabs = sorted(set(collab_ns_map) - set(totals))
+    if missing_collabs:
+        print("\nCollabs with no data:")
+        for collab in missing_collabs:
+            print(f"  {collab}")
