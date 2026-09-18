@@ -31,6 +31,12 @@ def test_parse_args():
     assert args.nautilus is True
     assert args.tiger is False
 
+    # Context override flags
+    args = parse_args(["--nautilus-context", "foo"])
+    assert args.nautilus_context == "foo"
+    assert args.tiger_context is None
+    assert args.tempest_context is None
+
     # New flags
     args = parse_args(["--no-exports", "--no-summary"])
     assert args.no_exports is True
@@ -211,6 +217,28 @@ def test_main_default_behavior(
     mock_summary.assert_called_once_with(
         [out_file], {}, exclude_ns_globs=[], title="Storage Utilization"
     )
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
+def test_main_context_override(
+    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    out_file = str(tmp_path / "nautilus.jsonl")
+    (tmp_path / "config.ini").write_text(
+        f"[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = {out_file}\n"
+    )
+    mock_process.return_value = (1, 0, 1, 0)
+
+    # Without override, config context is used
+    main(["--nautilus"])
+    assert mock_process.call_args.args[1] == "c1"
+
+    # With override, the flag wins
+    main(["--nautilus", "--nautilus-context", "override-ctx"])
+    assert mock_process.call_args.args[1] == "override-ctx"
 
 
 @patch("storage_metrics.print_collabs_summary")

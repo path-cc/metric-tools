@@ -45,6 +45,24 @@ def parse_args(argv) -> argparse.Namespace:
         "--tempest", action="store_true", help="Only process the tempest cluster"
     )
     parser.add_argument(
+        "--nautilus-context",
+        metavar="CONTEXT",
+        default=None,
+        help="Override the kubectl context for the nautilus cluster",
+    )
+    parser.add_argument(
+        "--tiger-context",
+        metavar="CONTEXT",
+        default=None,
+        help="Override the kubectl context for the tiger cluster",
+    )
+    parser.add_argument(
+        "--tempest-context",
+        metavar="CONTEXT",
+        default=None,
+        help="Override the kubectl context for the tempest cluster",
+    )
+    parser.add_argument(
         "-n",
         type=int,
         default=None,
@@ -334,6 +352,12 @@ def main(argv=None) -> int:
     show_table = not args.no_exports
     show_summary = not args.no_summary
 
+    context_overrides = {
+        "nautilus": args.nautilus_context,
+        "tiger": args.tiger_context,
+        "tempest": args.tempest_context,
+    }
+
     if args.input:
         if not show_table and not show_summary:
             print("Nothing to do")
@@ -366,6 +390,8 @@ def main(argv=None) -> int:
     out_files = []
     for cluster_name, section in config.clusters:
         context = section["context"]
+        if context_overrides.get(cluster_name):
+            context = context_overrides[cluster_name]
         namespaces = section["namespaces"].split()
         out_file = section["file"]
         exclude_globs = section.get("exclude_origins", "").split()
