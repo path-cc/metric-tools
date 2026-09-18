@@ -1,6 +1,11 @@
+import datetime
 import fnmatch
 import json
+import logging
 from typing import Optional
+
+DATA_MAX_AGE = datetime.timedelta(days=1)
+_log = logging.getLogger(__name__)
 
 
 def match_collab(fed_prefix: str, collab_ns_map: dict[str, list[str]]) -> Optional[str]:
@@ -35,23 +40,42 @@ def _read_exports(
     Returns a mapping of federation_prefix -> (public, size), where the last
     entry for each federation_prefix wins (last-wins deduplication).
     Entries missing federation_prefix or size are skipped, as are entries
-    whose federation_prefix matches any glob in exclude_ns_globs.
+    whose federation_prefix matches any glob in exclude_ns_globs. Entries
+    whose "time" field is missing, unparseable, or older than DATA_MAX_AGE
+    are skipped entirely (all of their exports).
     """
     seen: dict[str, tuple[Optional[bool], int]] = {}
+    now = datetime.datetime.now(datetime.timezone.utc)
     with open(data_path) as fh:
         for line in fh:
             line = line.strip()
             if not line:
                 continue
             entry = json.loads(line)
+            time_str = entry.get("time")
+            try:
+                entry_time = datetime.datetime.fromisoformat(time_str)
+            except (TypeError, ValueError):
+                _log.debug("%s: Skipping (missing or invalid time)", entry)
+                continue
+            if entry_time.tzinfo is None:
+                entry_time = entry_time.replace(tzinfo=datetime.timezone.utc)
+            if now - entry_time > DATA_MAX_AGE:
+                _log.debug("%s: Skipping (time older than %s)", entry, DATA_MAX_AGE)
+                continue
             for exp in entry.get("exports") or []:
                 fed = exp.get("federation_prefix")
                 size = exp.get("size")
-                if fed is None or size is None:
+                if fed is None:
+                    _log.debug("%s: Skipping (no federation_prefix)", exp)
+                    continue
+                if size is None:
+                    _log.debug("%s: Skipping (no size)", exp)
                     continue
                 if exclude_ns_globs and any(
                     fnmatch.fnmatch(fed, g) for g in exclude_ns_globs
                 ):
+                    _log.debug("%s: Skipping (matches an exclude_ns_glob)", exp)
                     continue
                 seen[fed] = (exp.get("public"), size)
     return seen
@@ -77,6 +101,7 @@ def print_exports_table(
     Columns printed: federation_prefix, public, size (in TiB by default).
     Exports where any of those three fields is missing or null are skipped.
     Exports whose federation_prefix matches any glob in exclude_ns_globs are silently omitted.
+    Entries whose "time" field is missing, unparseable, or older than DATA_MAX_AGE are omitted entirely.
     When the same federation_prefix appears more than once, the last entry wins.
 
     Parameters
@@ -147,6 +172,7 @@ def print_collabs_summary(
 
     Within each file, the same federation_prefix is deduplicated (last entry wins).
     Prefixes from different files are summed independently.
+    Entries whose "time" field is missing, unparseable, or older than DATA_MAX_AGE are omitted entirely.
 
     Parameters
     ----------

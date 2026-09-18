@@ -1,6 +1,14 @@
+import datetime
 import json
 
-from output import match_collab, print_collabs_summary, print_exports_table
+from output import (
+    DATA_MAX_AGE,
+    match_collab,
+    print_collabs_summary,
+    print_exports_table,
+)
+
+_FIXTURE_TIME = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 def test_print_exports_table(tmp_path, capsys):
@@ -10,13 +18,19 @@ def test_print_exports_table(tmp_path, capsys):
     data = [
         {
             "sitename": "site1",
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/fed1", "public": True, "size": 2**40},  # 1 TiB
-                {"federation_prefix": "/fed2", "public": False, "size": 2**39},  # 0.5 TiB
+                {
+                    "federation_prefix": "/fed2",
+                    "public": False,
+                    "size": 2**39,
+                },  # 0.5 TiB
             ],
         },
         {
             "sitename": "site2",
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/fed3", "public": True, "size": None},  # skipped
                 {"federation_prefix": "/fed4", "public": True, "size": 10**12},  # 1 TB
@@ -61,8 +75,14 @@ def test_print_exports_table_deduplication(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     # /ndp appears twice; last entry (public=True, size=200) should win
     data = [
-        {"exports": [{"federation_prefix": "/ndp", "public": False, "size": 100}]},
-        {"exports": [{"federation_prefix": "/ndp", "public": True, "size": 200}]},
+        {
+            "time": _FIXTURE_TIME,
+            "exports": [{"federation_prefix": "/ndp", "public": False, "size": 100}],
+        },
+        {
+            "time": _FIXTURE_TIME,
+            "exports": [{"federation_prefix": "/ndp", "public": True, "size": 200}],
+        },
     ]
     with open(jsonl_file, "w") as f:
         for entry in data:
@@ -82,10 +102,15 @@ def test_print_exports_table_right_aligned_size(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/short", "public": True, "size": 2**40},
-                {"federation_prefix": "/a-much-longer-prefix", "public": True, "size": 2**39},
-            ]
+                {
+                    "federation_prefix": "/a-much-longer-prefix",
+                    "public": True,
+                    "size": 2**39,
+                },
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
@@ -108,6 +133,7 @@ def test_print_exports_table_exclude_ns_globs(tmp_path, capsys):
     data = [
         {
             "sitename": "site1",
+            "time": _FIXTURE_TIME,
             "exports": [
                 {
                     "federation_prefix": "/ospool/uc-shared/project/HepSim",
@@ -150,11 +176,68 @@ def test_print_exports_table_exclude_ns_globs(tmp_path, capsys):
     assert "/ospool/uc-shared/project/HepSim" in captured
 
 
+def test_print_exports_table_skips_entries_without_fresh_time(tmp_path, capsys):
+    jsonl_file = tmp_path / "test.jsonl"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    data = [
+        {
+            "exports": [{"federation_prefix": "/fresh", "public": True, "size": 2**40}],
+            "time": now.isoformat(),
+        },
+        {
+            "exports": [{"federation_prefix": "/stale", "public": True, "size": 2**40}],
+            "time": (now - DATA_MAX_AGE - datetime.timedelta(seconds=1)).isoformat(),
+        },
+        {
+            "exports": [
+                {"federation_prefix": "/invalid", "public": True, "size": 2**40}
+            ],
+            "time": "not-a-timestamp",
+        },
+        {
+            "exports": [
+                {"federation_prefix": "/notime", "public": True, "size": 2**40}
+            ],
+        },
+    ]
+    with open(jsonl_file, "w") as f:
+        for entry in data:
+            f.write(json.dumps(entry) + "\n")
+
+    print_exports_table(str(jsonl_file))
+    captured = capsys.readouterr().out
+    assert "/fresh" in captured
+    assert "/stale" not in captured
+    assert "/invalid" not in captured
+    assert "/notime" not in captured
+
+
+def test_print_collabs_summary_skips_stale_entries(tmp_path, capsys):
+    jsonl_file = tmp_path / "test.jsonl"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    data = [
+        {
+            "exports": [
+                {"federation_prefix": "/EHT/pub", "public": True, "size": 2**40}
+            ],
+            "time": (now - DATA_MAX_AGE - datetime.timedelta(seconds=1)).isoformat(),
+        },
+    ]
+    with open(jsonl_file, "w") as f:
+        for entry in data:
+            f.write(json.dumps(entry) + "\n")
+
+    print_collabs_summary([str(jsonl_file)], {"EHT": ["/EHT/*"]})
+    captured = capsys.readouterr().out
+    assert "(no data)" in captured
+
+
 def test_print_exports_table_with_collab_map(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
             "sitename": "site1",
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/EHT/public", "public": True, "size": 2**40},
                 {"federation_prefix": "/ospool/other", "public": True, "size": 2**39},
@@ -218,11 +301,12 @@ def test_print_collabs_summary_basic(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/EHT/public/a", "public": True, "size": 2**40},
                 {"federation_prefix": "/EHT/public/b", "public": True, "size": 2**40},
                 {"federation_prefix": "/ospool/other", "public": False, "size": 2**39},
-            ]
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
@@ -248,10 +332,11 @@ def test_print_collabs_summary_public_private_split(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/EHT/public", "public": True, "size": 3 * 2**40},
                 {"federation_prefix": "/EHT/private", "public": False, "size": 2**40},
-            ]
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
@@ -272,10 +357,15 @@ def test_print_collabs_summary_unknown_public_private(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/unmatched/pub", "public": True, "size": 2**40},
-                {"federation_prefix": "/unmatched/priv", "public": False, "size": 2**39},
-            ]
+                {
+                    "federation_prefix": "/unmatched/priv",
+                    "public": False,
+                    "size": 2**39,
+                },
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
@@ -295,13 +385,23 @@ def test_print_collabs_summary_multi_file(tmp_path, capsys):
     f2 = tmp_path / "b.jsonl"
     f1.write_text(
         json.dumps(
-            {"exports": [{"federation_prefix": "/EHT/pub", "public": True, "size": 2**40}]}
+            {
+                "time": _FIXTURE_TIME,
+                "exports": [
+                    {"federation_prefix": "/EHT/pub", "public": True, "size": 2**40}
+                ],
+            }
         )
         + "\n"
     )
     f2.write_text(
         json.dumps(
-            {"exports": [{"federation_prefix": "/EHT/priv", "public": False, "size": 2**40}]}
+            {
+                "time": _FIXTURE_TIME,
+                "exports": [
+                    {"federation_prefix": "/EHT/priv", "public": False, "size": 2**40}
+                ],
+            }
         )
         + "\n"
     )
@@ -321,8 +421,14 @@ def test_print_collabs_summary_deduplication(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     # /ndp appears twice; last entry (public=True, size=200) should win
     data = [
-        {"exports": [{"federation_prefix": "/ndp", "public": False, "size": 100}]},
-        {"exports": [{"federation_prefix": "/ndp", "public": True, "size": 200}]},
+        {
+            "time": _FIXTURE_TIME,
+            "exports": [{"federation_prefix": "/ndp", "public": False, "size": 100}],
+        },
+        {
+            "time": _FIXTURE_TIME,
+            "exports": [{"federation_prefix": "/ndp", "public": True, "size": 200}],
+        },
     ]
     with open(jsonl_file, "w") as f:
         for entry in data:
@@ -343,7 +449,12 @@ def test_print_collabs_summary_deduplication(tmp_path, capsys):
 def test_print_collabs_summary_si(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
-        {"exports": [{"federation_prefix": "/EHT/public", "public": True, "size": 10**12}]}
+        {
+            "time": _FIXTURE_TIME,
+            "exports": [
+                {"federation_prefix": "/EHT/public", "public": True, "size": 10**12}
+            ],
+        }
     ]
     with open(jsonl_file, "w") as f:
         f.write(json.dumps(data[0]) + "\n")
@@ -359,10 +470,11 @@ def test_print_collabs_summary_exclude(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/EHT/public", "public": True, "size": 2**40},
                 {"federation_prefix": "/excluded/ns", "public": True, "size": 2**40},
-            ]
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
@@ -390,7 +502,12 @@ def test_print_collabs_summary_no_data(tmp_path, capsys):
 def test_print_exports_table_title(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     jsonl_file.write_text(
-        json.dumps({"exports": [{"federation_prefix": "/f", "public": True, "size": 2**40}]})
+        json.dumps(
+            {
+                "time": _FIXTURE_TIME,
+                "exports": [{"federation_prefix": "/f", "public": True, "size": 2**40}],
+            }
+        )
         + "\n"
     )
 
@@ -419,7 +536,12 @@ def test_print_exports_table_title(tmp_path, capsys):
 def test_print_collabs_summary_title(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     jsonl_file.write_text(
-        json.dumps({"exports": [{"federation_prefix": "/f", "public": True, "size": 2**40}]})
+        json.dumps(
+            {
+                "time": _FIXTURE_TIME,
+                "exports": [{"federation_prefix": "/f", "public": True, "size": 2**40}],
+            }
+        )
         + "\n"
     )
 
@@ -448,10 +570,11 @@ def test_print_collabs_summary_right_aligned(tmp_path, capsys):
     jsonl_file = tmp_path / "test.jsonl"
     data = [
         {
+            "time": _FIXTURE_TIME,
             "exports": [
                 {"federation_prefix": "/EHT/pub", "public": True, "size": 2**40},
                 {"federation_prefix": "/EHT/priv", "public": False, "size": 2**39},
-            ]
+            ],
         }
     ]
     with open(jsonl_file, "w") as f:
