@@ -396,9 +396,15 @@ def main(argv=None) -> int:
             print(f"All pods for {cluster_name} skipped.", file=sys.stderr)
 
         out_files.append(out_file)
-        if show_table:
+
+    # Render after collection so stdout tables cannot be interleaved with stderr progress.
+    if args.verbose:
+        print()
+        print()
+    if show_table:
+        for cluster_name, section in config.clusters:
             print_exports_table(
-                out_file,
+                section["file"],
                 collab_ns_map=config.collab_ns_map,
                 exclude_ns_globs=config.exclude_ns_globs,
                 title=f"{cluster_name.capitalize()} Exports",

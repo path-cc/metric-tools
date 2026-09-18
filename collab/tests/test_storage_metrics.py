@@ -216,6 +216,42 @@ def test_main_default_behavior(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
+def test_main_renders_tables_after_all_clusters_are_collected(
+    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    nautilus_file = str(tmp_path / "nautilus.jsonl")
+    tiger_file = str(tmp_path / "tiger.jsonl")
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\n"
+        f"context = c1\nnamespaces = ns1\nfile = {nautilus_file}\n"
+        "[tiger]\n"
+        f"context = c2\nnamespaces = ns2\nfile = {tiger_file}\n"
+    )
+    mock_process.return_value = (1, 0, 1, 0)
+    events = []
+    mock_process.side_effect = lambda *args: (
+        events.append(f"fetch:{args[0]}") or (1, 0, 1, 0)
+    )
+    mock_table.side_effect = lambda *_args, **kwargs: events.append(
+        f"table:{kwargs['title'].split()[0].lower()}"
+    )
+    mock_summary.side_effect = lambda *_args, **_kwargs: events.append("summary")
+
+    main([])
+
+    assert events == [
+        "fetch:nautilus",
+        "fetch:tiger",
+        "table:nautilus",
+        "table:tiger",
+        "summary",
+    ]
+
+
+@patch("storage_metrics.print_collabs_summary")
+@patch("storage_metrics.print_exports_table")
+@patch("storage_metrics._process_namespace")
 def test_main_no_flags(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
