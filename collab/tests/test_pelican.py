@@ -29,12 +29,21 @@ def test_get_exports_for_pod(mock_copy, mock_run_inner):
         "status": "ok",
         "sitename": "site-s3",
         "storagetype": "s3",
-        "s3": {"exports": [{"bucket": "b1"}]},
+        "s3": {
+            "serviceurl": "http://endpoint",
+            "region": None,
+            "accesskey": None,
+            "secretkey": None,
+            "exports": [{"s3bucket": "b1"}],
+        },
         "time": "2023-01-01T00:00:00Z",
     }
-    sitename, exports, time_str = get_exports_for_pod(origin)
+    with patch(
+        "pelican.handle_s3_exports", return_value=[{"s3bucket": "b1", "size": 1}]
+    ):
+        sitename, exports, time_str = get_exports_for_pod(origin)
     assert sitename == "site-s3"
-    assert exports == [{"bucket": "b1"}]
+    assert exports == [{"s3bucket": "b1", "size": 1}]
     assert time_str == "2023-01-01T00:00:00Z"
 
     # Unknown storage type should return empty exports

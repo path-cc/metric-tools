@@ -5,7 +5,29 @@ from helpers import run
 
 
 def handle_s3_exports(s3_result: dict) -> list[dict]:
-    """Stub: extract S3 exports from the inner script's 's3' result dict."""
+    """Populate each S3 export with its bucket size.
+
+    Bucket failures are recorded on the individual export so one inaccessible
+    bucket does not hide results for the remaining exports.
+    """
+    endpoint = s3_result['serviceurl']
+    region = s3_result.get('region')
+    access_key = s3_result.get('accesskey')
+    secret_key = s3_result.get('secretkey')
+
+    for export in s3_result['exports']:
+        try:
+            export['size'] = get_s3_bucket_size(
+                export['s3bucket'],
+                endpoint,
+                region=region,
+                access_key=access_key,
+                secret_key=secret_key,
+            )
+        except Exception as err:
+            export['size'] = None
+            export['error'] = f"{type(err).__name__}: {err}"
+
     return s3_result['exports']
 
 

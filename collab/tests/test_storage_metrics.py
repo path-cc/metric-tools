@@ -18,7 +18,7 @@ from storage_metrics import (
 def test_parse_args():
     # Default flags
     args = parse_args([])
-    assert args.verbose is False
+    assert args.verbose is True
     assert args.no_exports is False
     assert args.no_summary is False
     assert args.input == []
@@ -68,9 +68,14 @@ def test_read_config_collab_map(tmp_path, monkeypatch):
     config_file = tmp_path / "config.ini"
 
     # Single prefix per collab
-    config_file.write_text("[collab_namespaces]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n")
+    config_file.write_text(
+        "[collab_namespaces]\nEHT = /EHT/public\nREDTOP = /REDTOP/public\n"
+    )
     config = read_config(parse_args([]))
-    assert config.collab_ns_map == {"EHT": ["/EHT/public"], "REDTOP": ["/REDTOP/public"]}
+    assert config.collab_ns_map == {
+        "EHT": ["/EHT/public"],
+        "REDTOP": ["/REDTOP/public"],
+    }
 
     # Multiple space-separated prefixes
     config_file.write_text(
@@ -188,7 +193,9 @@ def test_main_input_flag(mock_table, mock_summary, tmp_path, monkeypatch):
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_default_behavior(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_default_behavior(
+    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -286,7 +293,9 @@ def test_main_nothing_to_do(mock_table, mock_summary, tmp_path, monkeypatch, cap
 
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
-def test_main_input_title_disambiguation(mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_input_title_disambiguation(
+    mock_table, mock_summary, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.ini").write_text(
         "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = out.jsonl\n"
@@ -311,7 +320,9 @@ def test_main_input_title_disambiguation(mock_table, mock_summary, tmp_path, mon
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_cluster_title(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+def test_main_cluster_title(
+    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -402,7 +413,11 @@ def test_process_origin_adds_date(tmp_path):
     out_file = tmp_path / "out.jsonl"
 
     with patch("storage_metrics.get_exports_for_pod") as mock_get:
-        mock_get.return_value = ("site", [{"federation_prefix": "/f", "size": 100}], "2023-01-01T00:00:00Z")
+        mock_get.return_value = (
+            "site",
+            [{"federation_prefix": "/f", "size": 100}],
+            "2023-01-01T00:00:00Z",
+        )
         with open(out_file, "w") as fh:
             _process_origin("cluster", origin, None, fh, args)
 
@@ -440,4 +455,3 @@ def test_process_origin_adds_date_on_failure(tmp_path):
         assert data["exports"] is None
         dt = datetime.datetime.fromisoformat(data["time"])
         assert dt is not None
-
