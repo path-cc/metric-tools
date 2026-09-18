@@ -242,10 +242,10 @@ def _process_origin(
     fh.write(
         json.dumps(
             {
+                "time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "sitename": sitename,
                 "origin": origin.deployment,
                 "exports": exports,
-                "sitename": sitename,
-                "time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
         )
         + "\n"
