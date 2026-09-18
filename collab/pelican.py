@@ -230,13 +230,13 @@ def get_exports_for_pod(
     if result['status'] != "ok":
         raise InnerScriptError(f"Inner script returned error: {result['error']}")
     storagetype = result['storagetype']
-    if storagetype == "posix":
+    if storagetype in {"posix", "posixv2"}:
         exports = result['posix']['exports']
-    elif storagetype == "s3":
+    elif storagetype in {"s3", "s3v2"}:
         exports = handle_s3_exports(result['s3'])
     else:
         print(
-            f"WARNING: {origin.pod_name}: unknown storage type {storagetype!r}, skipping exports",
+            f"WARNING: {origin.pod_name}: unknown or unsupported storage type {storagetype!r}, skipping exports",
             file=sys.stderr,
         )
         exports = []

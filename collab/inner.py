@@ -471,9 +471,9 @@ def main(argv=()):
             # Explicit scan arg takes precedence over configured storage type.
             if len(argv) > 1 and argv[1] == "scan":
                 handle_scan(origin_config, result, argv[2:])
-            elif result['storagetype'] == "posix":
+            elif result['storagetype'] in {"posix", "posixv2"}:
                 handle_posix(origin_config, result)
-            elif result['storagetype'] == "s3":
+            elif result['storagetype'] in {"s3", "s3v2"}:
                 handle_s3(origin_config, result)
         except Exception as err:
             result['status'] = "error"
