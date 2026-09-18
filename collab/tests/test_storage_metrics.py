@@ -199,8 +199,9 @@ def test_main_input_flag(mock_table, mock_summary, tmp_path, monkeypatch):
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_cluster_access", return_value=True)
 def test_main_default_behavior(
-    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+    mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
@@ -222,8 +223,9 @@ def test_main_default_behavior(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_cluster_access", return_value=True)
 def test_main_context_override(
-    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+    mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
@@ -244,8 +246,9 @@ def test_main_context_override(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_cluster_access", return_value=True)
 def test_main_renders_tables_after_all_clusters_are_collected(
-    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+    mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
     nautilus_file = str(tmp_path / "nautilus.jsonl")
@@ -280,7 +283,10 @@ def test_main_renders_tables_after_all_clusters_are_collected(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_no_flags(mock_process, mock_table, mock_summary, tmp_path, monkeypatch):
+@patch("storage_metrics.check_cluster_access", return_value=True)
+def test_main_no_flags(
+    mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(
@@ -306,6 +312,28 @@ def test_main_no_flags(mock_process, mock_table, mock_summary, tmp_path, monkeyp
     main(["--nautilus", "--no-exports", "--no-summary"])
     mock_table.assert_not_called()
     mock_summary.assert_not_called()
+
+
+@patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_cluster_access", side_effect=[False, True, False])
+def test_main_checks_all_clusters_before_collection(
+    mock_access, mock_process, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.ini").write_text(
+        "[nautilus]\ncontext = c1\nnamespaces = ns1\nfile = nautilus.jsonl\n"
+        "[tiger]\ncontext = c2\nnamespaces = ns2\nfile = tiger.jsonl\n"
+        "[tempest]\ncontext = c3\nnamespaces = ns3\nfile = tempest.jsonl\n"
+    )
+
+    assert main([]) == 1
+    assert [call.args for call in mock_access.call_args_list] == [
+        ("nautilus", "c1"),
+        ("tiger", "c2"),
+        ("tempest", "c3"),
+    ]
+    mock_process.assert_not_called()
+    assert "nautilus, tempest" in capsys.readouterr().err
 
 
 @patch("storage_metrics.print_collabs_summary")
@@ -384,8 +412,9 @@ def test_main_input_title_disambiguation(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_cluster_access", return_value=True)
 def test_main_cluster_title(
-    mock_process, mock_table, mock_summary, tmp_path, monkeypatch
+    mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
@@ -443,7 +472,10 @@ def test_process_namespace_exclude(mock_access, mock_find, mock_exports, tmp_pat
 
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-def test_main_all_pods_skipped(mock_process, mock_table, tmp_path, monkeypatch, capsys):
+@patch("storage_metrics.check_cluster_access", return_value=True)
+def test_main_all_pods_skipped(
+    mock_access, mock_process, mock_table, tmp_path, monkeypatch, capsys
+):
     monkeypatch.chdir(tmp_path)
     out_file = str(tmp_path / "nautilus.jsonl")
     (tmp_path / "config.ini").write_text(

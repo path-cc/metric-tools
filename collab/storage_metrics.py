@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from k8s import check_namespace_access, find_pelican_origin_pods
+from k8s import check_cluster_access, check_namespace_access, find_pelican_origin_pods
 from output import print_collabs_summary, print_exports_table
 from pelican import get_exports_for_pod
 
@@ -386,6 +386,18 @@ def main(argv=None) -> int:
             )
             sys.stdout.flush()
         return 0
+
+    inaccessible_clusters = []
+    for cluster_name, section in config.clusters:
+        context = context_overrides.get(cluster_name) or section["context"]
+        if not check_cluster_access(cluster_name, context):
+            inaccessible_clusters.append(cluster_name)
+    if inaccessible_clusters:
+        print(
+            "ERROR: cannot access cluster(s): " + ", ".join(inaccessible_clusters),
+            file=sys.stderr,
+        )
+        return 1
 
     out_files = []
     for cluster_name, section in config.clusters:

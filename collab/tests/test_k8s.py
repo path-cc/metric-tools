@@ -4,6 +4,7 @@ import pytest
 
 from collab_types import Error, Origin
 from k8s import (
+    check_cluster_access,
     check_namespace_access,
     examine_pod,
     is_origin_container,
@@ -110,3 +111,35 @@ def test_check_namespace_access(mock_run, capsys):
     captured = capsys.readouterr().err
     assert "ERROR: insufficient permissions" in captured
     assert "forbidden" in captured
+
+
+@patch("k8s.run")
+def test_check_cluster_access_checks_both_permissions(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="yes", stderr="")
+
+    assert check_cluster_access("cluster", "context") is True
+    assert mock_run.call_count == 2
+    assert mock_run.call_args_list[0].args[0] == [
+        "kubectl",
+        "--context",
+        "context",
+        "auth",
+        "can-i",
+        "get",
+        "pods",
+    ]
+
+
+@patch("k8s.run")
+def test_check_cluster_access_reports_both_failures(mock_run, capsys):
+    mock_run.side_effect = [
+        MagicMock(returncode=1, stdout="", stderr="forbidden"),
+        MagicMock(returncode=1, stdout="no", stderr=""),
+    ]
+
+    assert check_cluster_access("cluster", "context") is False
+    assert mock_run.call_count == 2
+    captured = capsys.readouterr().err
+    assert captured.count("ERROR: insufficient access") == 2
+    assert "forbidden" in captured
+    assert "no" in captured
