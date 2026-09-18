@@ -114,6 +114,14 @@ def parse_args(argv) -> argparse.Namespace:
         metavar="FILE",
         help="Read data from FILE instead of querying clusters (may be given multiple times)",
     )
+    parser.add_argument(
+        "--max-age",
+        type=float,
+        default=1.0,
+        metavar="DAYS",
+        help="Maximum age (in days, may be fractional) of a line of data to include "
+        "in the exports table and summary (default: 1)",
+    )
     args = parser.parse_args(argv)
 
     if args.s and args.pod:
@@ -351,6 +359,7 @@ def main(argv=None) -> int:
     config = read_config(args)
     show_table = not args.no_exports
     show_summary = not args.no_summary
+    max_age = datetime.timedelta(days=args.max_age)
 
     context_overrides = {
         "nautilus": args.nautilus_context,
@@ -375,6 +384,7 @@ def main(argv=None) -> int:
                     collab_ns_map=config.collab_ns_map,
                     exclude_ns_globs=config.exclude_ns_globs,
                     title=table_title,
+                    max_age=max_age,
                 )
                 sys.stdout.flush()
         if show_summary:
@@ -383,6 +393,7 @@ def main(argv=None) -> int:
                 config.collab_ns_map,
                 exclude_ns_globs=config.exclude_ns_globs,
                 title="Storage Utilization",
+                max_age=max_age,
             )
             sys.stdout.flush()
         return 0
@@ -446,6 +457,7 @@ def main(argv=None) -> int:
                 collab_ns_map=config.collab_ns_map,
                 exclude_ns_globs=config.exclude_ns_globs,
                 title=f"{cluster_name.capitalize()} Exports",
+                max_age=max_age,
             )
             sys.stdout.flush()
 
@@ -455,6 +467,7 @@ def main(argv=None) -> int:
             config.collab_ns_map,
             exclude_ns_globs=config.exclude_ns_globs,
             title="Storage Utilization",
+            max_age=max_age,
         )
         sys.stdout.flush()
 

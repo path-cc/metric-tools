@@ -33,6 +33,7 @@ def match_collab(fed_prefix: str, collab_ns_map: dict[str, list[str]]) -> Option
 def _read_exports(
     data_path: str,
     exclude_ns_globs: Optional[list[str]],
+    max_age: datetime.timedelta = DATA_MAX_AGE,
 ) -> dict[str, tuple[Optional[bool], int]]:
     """
     Read exports from a .jsonl file and return a deduplicated dict.
@@ -41,8 +42,13 @@ def _read_exports(
     entry for each federation_prefix wins (last-wins deduplication).
     Entries missing federation_prefix or size are skipped, as are entries
     whose federation_prefix matches any glob in exclude_ns_globs. Entries
-    whose "time" field is missing, unparseable, or older than DATA_MAX_AGE
+    whose "time" field is missing, unparseable, or older than max_age
     are skipped entirely (all of their exports).
+
+    Parameters
+    ----------
+    max_age:
+        Maximum age of a "time" entry to still be included. Defaults to DATA_MAX_AGE.
     """
     seen: dict[str, tuple[Optional[bool], int]] = {}
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -60,8 +66,8 @@ def _read_exports(
                 continue
             if entry_time.tzinfo is None:
                 entry_time = entry_time.replace(tzinfo=datetime.timezone.utc)
-            if now - entry_time > DATA_MAX_AGE:
-                _log.debug("%s: Skipping (time older than %s)", entry, DATA_MAX_AGE)
+            if now - entry_time > max_age:
+                _log.debug("%s: Skipping (time older than %s)", entry, max_age)
                 continue
             for exp in entry.get("exports") or []:
                 fed = exp.get("federation_prefix")
@@ -94,6 +100,7 @@ def print_exports_table(
     collab_ns_map: Optional[dict[str, list[str]]] = None,
     exclude_ns_globs: Optional[list[str]] = None,
     title: Optional[str] = None,
+    max_age: datetime.timedelta = DATA_MAX_AGE,
 ) -> None:
     """
     Read a .jsonl file produced by this script and print a table of exports.
@@ -101,7 +108,7 @@ def print_exports_table(
     Columns printed: federation_prefix, public, size (in TiB by default).
     Exports where any of those three fields is missing or null are skipped.
     Exports whose federation_prefix matches any glob in exclude_ns_globs are silently omitted.
-    Entries whose "time" field is missing, unparseable, or older than DATA_MAX_AGE are omitted entirely.
+    Entries whose "time" field is missing, unparseable, or older than max_age are omitted entirely.
     When the same federation_prefix appears more than once, the last entry wins.
 
     Parameters
@@ -114,6 +121,8 @@ def print_exports_table(
         A collaboration-to-namespace glob pattern mapping.
     exclude_ns_globs:
         Glob patterns for federation prefixes to silently exclude from the table.
+    max_age:
+        Maximum age of a "time" entry to still be included. Defaults to DATA_MAX_AGE.
     """
     if title is not None:
         _print_title(title)
@@ -122,7 +131,7 @@ def print_exports_table(
     size_header = "size (TB)" if si else "size (TiB)"
 
     use_collab = bool(collab_ns_map)
-    seen = _read_exports(data_path, exclude_ns_globs)
+    seen = _read_exports(data_path, exclude_ns_globs, max_age)
 
     rows: list[tuple] = []
     for fed, (pub, size) in seen.items():
@@ -162,6 +171,7 @@ def print_collabs_summary(
     si: bool = False,
     exclude_ns_globs: Optional[list[str]] = None,
     title: Optional[str] = None,
+    max_age: datetime.timedelta = DATA_MAX_AGE,
 ) -> None:
     """
     Read one or more .jsonl files and print a combined per-collaboration storage summary.
@@ -173,7 +183,7 @@ def print_collabs_summary(
 
     Within each file, the same federation_prefix is deduplicated (last entry wins).
     Prefixes from different files are summed independently.
-    Entries whose "time" field is missing, unparseable, or older than DATA_MAX_AGE are omitted entirely.
+    Entries whose "time" field is missing, unparseable, or older than max_age are omitted entirely.
 
     Parameters
     ----------
@@ -185,6 +195,8 @@ def print_collabs_summary(
         If True, display size in SI terabytes (10^12 bytes) instead of TiB (2^40 bytes).
     exclude_ns_globs:
         Glob patterns for federation prefixes to silently exclude from the summary.
+    max_age:
+        Maximum age of a "time" entry to still be included. Defaults to DATA_MAX_AGE.
     """
     if title is not None:
         _print_title(title)
@@ -200,7 +212,7 @@ def print_collabs_summary(
     unmatched: set[str] = set()
 
     for data_path in data_paths:
-        seen = _read_exports(data_path, exclude_ns_globs)
+        seen = _read_exports(data_path, exclude_ns_globs, max_age)
         for fed, (pub, size) in seen.items():
             if pub is None:
                 continue

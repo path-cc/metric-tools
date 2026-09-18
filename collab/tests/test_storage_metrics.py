@@ -213,10 +213,18 @@ def test_main_default_behavior(
     # Without any flag, both are printed
     main(["--nautilus"])
     mock_table.assert_called_once_with(
-        out_file, collab_ns_map={}, exclude_ns_globs=[], title="Nautilus Exports"
+        out_file,
+        collab_ns_map={},
+        exclude_ns_globs=[],
+        title="Nautilus Exports",
+        max_age=datetime.timedelta(days=1),
     )
     mock_summary.assert_called_once_with(
-        [out_file], {}, exclude_ns_globs=[], title="Storage Utilization"
+        [out_file],
+        {},
+        exclude_ns_globs=[],
+        title="Storage Utilization",
+        max_age=datetime.timedelta(days=1),
     )
 
 
