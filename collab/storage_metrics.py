@@ -12,6 +12,7 @@ import configparser
 import datetime
 import fnmatch
 import json
+import logging
 import sys
 from collections import Counter
 from pathlib import Path
@@ -66,10 +67,16 @@ def parse_args(argv) -> argparse.Namespace:
         help="Only process pods whose name starts with PREFIX (may be given multiple times)",
     )
     parser.add_argument(
-        "-v",
-        "--verbose",
+        "-q",
+        "--quiet",
+        dest="verbose",
+        action="store_false",
+        help="Do not print progress messages to stderr",
+    )
+    parser.add_argument(
+        "--debug",
         action="store_true",
-        help="Print progress messages to stderr",
+        help="Print debug messages",
     )
     parser.add_argument(
         "--no-exports",
@@ -106,7 +113,7 @@ def read_config(args: argparse.Namespace) -> ConfigData:
 
     cfg = configparser.ConfigParser()
     # preserve key case:
-    cfg.optionxform = str  # type:ignore
+    cfg.optionxform = str  # type: ignore
     cfg.read("config.ini")
 
     clusters = []
@@ -216,7 +223,9 @@ def _process_origin(
                 flush=True,
             )
         if prefix_pairs is not None:
-            sitename, exports, time_str = get_exports_for_pod(origin, prefix_pairs=prefix_pairs)
+            sitename, exports, time_str = get_exports_for_pod(
+                origin, prefix_pairs=prefix_pairs
+            )
         else:
             sitename, exports, time_str = get_exports_for_pod(origin)
     except Exception as err:
@@ -318,6 +327,9 @@ def _process_namespace(
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+
     config = read_config(args)
     show_table = not args.no_exports
     show_summary = not args.no_summary
