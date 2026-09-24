@@ -22,7 +22,7 @@ Requirements
 
 * Python 3.9
 * kubectl
-* (not yet) AWS CLI
+* AWS CLI (for S3 origins)
 
 
 Usage
