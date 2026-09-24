@@ -550,6 +550,10 @@ def main(argv=None) -> int:
         # Enter pods in clusters to gather statistics.
         #
 
+        if not config.clusters:
+            print("No clusters defined in config file!")
+            return 1
+
         if not k8s_pre_flight_check(config.clusters):
             return 1
 

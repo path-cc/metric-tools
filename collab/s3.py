@@ -1,8 +1,10 @@
 import re
+import logging
 from typing import Optional
 
 from helpers import run
 
+_log = logging.getLogger(__name__)
 
 def handle_s3_exports(s3_result: dict) -> list[dict]:
     """Populate each S3 export with its bucket size.
@@ -95,7 +97,7 @@ def get_s3_bucket_size(
     for line in (ret.stdout + ret.stderr).splitlines():
         m = re.search(r"x-rgw-bytes-used\D+(\d+)", line, re.IGNORECASE)
         if m:
-            print(f"{bucket}: size from HEAD probe", flush=True)
+            _log.debug("%s: size from HEAD probe", bucket)
             return int(m.group(1))
 
     # Step 2: Sanity probe — verify list access before the expensive full scan.
@@ -132,7 +134,7 @@ def get_s3_bucket_size(
         extra_env=extra_env,
     )
     text = ret.stdout.strip()
-    print(f"{bucket}: size from full object sum", flush=True)
+    _log.debug("%s: size from full object sum", bucket)
     if text in ("None", ""):
         return 0
     return int(text)
