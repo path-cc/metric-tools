@@ -349,14 +349,22 @@ def handle_s3(origin_config: dict, result: dict) -> None:
 
 def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None:
     """
-    Implement scan mode by crawling subdirectories of the export directories
-    based on provided storage:federation prefix mappings.
+    Implement scan mode by measuring each immediate subdirectory selected by
+    the provided storage:federation prefix mappings.
 
     Each scan argument uses ``storage_root:federation_root`` format.  They
     are both absolute paths that should be subdirectories of the
     StoragePrefixes and FederationPrefixes in the Origin config.
+
+    The configured POSIX exports are used to inherit the public/private
+    setting for each scan path.  A scan intentionally reports one export per
+    immediate child directory rather than measuring the mapping root itself,
+    allowing subdirectories that represent different federation namespaces
+    to be counted separately.
     """
-    # To determine public/private, we need the existing POSIX exports for longest-prefix matching
+    # Resolve each mapping against configured exports so the scan preserves the
+    # access policy (public or authenticated) of the most specific federation
+    # prefix that contains it.
     known_exports = get_posix_export_dirs(origin_config)
     scanned_exports: list[Export] = []
 
@@ -371,7 +379,8 @@ def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None
             resolve_storage_federation_mapping(known_exports, arg)
         )
 
-        # Now go through the top level of storage_root
+        # Only immediate children are emitted: deeper content is included in
+        # each child's byte total by get_dir_bytes().
         with os.scandir(storage_root) as it:
             for entry in it:
                 if not entry.is_dir():
@@ -401,12 +410,36 @@ def handle_scan(origin_config: dict, result: dict, scan_args: list[str]) -> None
     result['storagetype'] = "posix"
 
 
+def _is_subpath(path: str, prefix: str) -> bool:
+    """
+    Return whether `path` is `prefix` itself or a path strictly beneath it.
+
+    Uses `os.path.commonpath()` so comparison is directory-aware: it splits
+    on path separators rather than doing a raw string prefix check, so e.g.
+    ``/foo2`` does not match a prefix of ``/foo`` (a plain
+    ``str.startswith()`` would incorrectly match it).
+    """
+    return os.path.commonpath([path, prefix]) == prefix
+
+
 def resolve_storage_federation_mapping(known_exports, arg):
     """
-    Split out the storage_root and federation_root from the scan argument,
-    and determine whether it's public or private based on longest prefix
-    match of the federation root against the known exports.
+    Normalize a scan mapping, validate it against the configured exports, and
+    inherit its configured access policy.
+
+    A scan argument maps a storage directory to its corresponding federation
+    path.  Both the storage path and the federation path must fall under the
+    *same* configured export's storage_prefix/federation_prefix pair (via
+    directory-aware, not raw-string, prefix matching) -- this guards against
+    scan arguments whose storage side doesn't actually correspond to the
+    federation prefix it claims, since previously only the federation path
+    was checked. The storage path is used for filesystem traversal, while the
+    export's ``public`` flag is inherited for the resulting scanned exports.
+    When multiple configured exports match, the longest matching federation
+    prefix wins because it represents the most specific policy.
     """
+    # Scan arguments use the federation path only for policy lookup; preserve
+    # the storage path separately because it is the path we will enumerate.
     storage_root, _, federation_root = arg.partition(":")
     storage_root = storage_root.rstrip("/")
     federation_root = federation_root.rstrip("/")
@@ -415,7 +448,15 @@ def resolve_storage_federation_mapping(known_exports, arg):
     match_found = False
     best_len = -1
     for ex in known_exports:
-        if ex.federation_prefix and federation_root.startswith(ex.federation_prefix):
+        if not ex.federation_prefix or not ex.storage_prefix:
+            continue
+        # A longer match supersedes a broader export prefix, ensuring nested
+        # exports can override the access policy of their parent. Both the
+        # federation and storage sides must match the same export so the
+        # scan path can't straddle two unrelated exports.
+        if _is_subpath(federation_root, ex.federation_prefix) and _is_subpath(
+            storage_root, ex.storage_prefix
+        ):
             if len(ex.federation_prefix) > best_len:
                 best_len = len(ex.federation_prefix)
                 match_public = ex.public
@@ -424,8 +465,9 @@ def resolve_storage_federation_mapping(known_exports, arg):
     if not match_found:
         raise RuntimeError(
             f"Invalid mapping {arg} -- no matching export found for "
-            f"scan path {federation_root}; it must be a subpath of a "
-            "configured export prefix"
+            f"scan path {federation_root} (storage root {storage_root}); "
+            "both must be subpaths of the same configured export's "
+            "federation and storage prefixes"
         )
 
     return storage_root, federation_root, match_public
