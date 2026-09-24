@@ -24,10 +24,17 @@ def test_is_origin_container():
         is_origin_container({"image": "hub.opensciencegrid.org/pelican/origin:v1.0.0"})
         is True
     )
+    assert (
+        is_origin_container({"image": "hub.osg-htc.org/pelican/origin:v1.0.0"}) is True
+    )
 
     # Non-matching images should return False
     assert (
         is_origin_container({"image": "hub.opensciencegrid.org/pelican/cache:latest"})
+        is False
+    )
+    assert (
+        is_origin_container({"image": "registry.example.org/pelican/origin:latest"})
         is False
     )
     assert is_origin_container({"image": "nginx:latest"}) is False
@@ -120,11 +127,11 @@ def test_check_cluster_access_checks_context_authentication(mock_run):
     assert check_cluster_access("cluster", "context") is True
     mock_run.assert_called_once_with(
         [
-        "kubectl",
-        "--context",
-        "context",
-        "auth",
-        "whoami",
+            "kubectl",
+            "--context",
+            "context",
+            "auth",
+            "whoami",
         ],
         check=False,
     )

@@ -10,6 +10,10 @@ from helpers import run
 
 # Image name substrings that identify a Pelican Origin container.
 ORIGIN_IMAGE_NAMES: tuple[str, ...] = ("osdf-origin", "origin")
+ORIGIN_IMAGE_REGISTRIES: tuple[str, ...] = (
+    "hub.osg-htc.org",
+    "hub.opensciencegrid.org",
+)
 
 
 def run_in_origin(
@@ -122,16 +126,19 @@ def namespace_for_context(context: Optional[str] = None) -> str:
 def is_origin_container(container: dict) -> bool:
     """
     Return True if *container* (a Kubernetes container spec dict) looks like a
-    Pelican Origin container based on its image name (one of ORIGIN_IMAGE_NAMES).
+    Pelican Origin container based on its registry and image name.
+
+    An image must name one of ORIGIN_IMAGE_REGISTRIES explicitly; unqualified
+    image names and images from other registries are not recognized.
     """
     full_image: str = container.get("image", "")
-    # This assumes that image names always have the registry
-    parts = re.split(r"[:@/]", full_image)
-    try:
-        image = parts[2]
-        return image in ORIGIN_IMAGE_NAMES
-    except IndexError:
+    registry, separator, image_path = full_image.partition("/")
+    if not separator or registry not in ORIGIN_IMAGE_REGISTRIES:
         return False
+
+    # Use the final path component, removing its optional tag or digest.
+    image = re.split(r"[:@]", image_path.rsplit("/", maxsplit=1)[-1])[0]
+    return image in ORIGIN_IMAGE_NAMES
 
 
 def examine_pod(
