@@ -13,8 +13,10 @@ from inner import (
     get_required_config,
     get_s3_export_buckets,
     handle_posix,
+    handle_scan,
     handle_s3,
     main,
+    resolve_storage_federation_mapping,
 )
 
 # ---------------------------------------------------------------------------
@@ -374,6 +376,159 @@ class TestHandleS3:
         assert result["s3"]["accesskey"] is None
         assert result["s3"]["secretkey"] is None
         assert result["s3"]["serviceurl"] == "https://s3.example.com"
+
+
+# ---------------------------------------------------------------------------
+# resolve_storage_federation_mapping
+# ---------------------------------------------------------------------------
+
+
+class TestResolveStorageFederationMapping:
+    def test_normalizes_roots_and_inherits_public_policy(self):
+        # A mapping may have trailing slashes, but the scan should use
+        # normalized roots and inherit the matching export's access policy.
+        known_exports = get_posix_export_dirs(
+            {
+                "Exports": [
+                    {
+                        "storageprefix": "/data",
+                        "federationprefix": "/ospool/data",
+                        "capabilities": ["PublicReads"],
+                    }
+                ]
+            }
+        )
+
+        result = resolve_storage_federation_mapping(
+            known_exports, "/data/sub/:/ospool/data/sub/"
+        )
+
+        assert result == ("/data/sub", "/ospool/data/sub", True)
+
+    def test_longest_federation_prefix_wins(self):
+        # A nested export can override its parent's policy, so resolution must
+        # select the most specific federation prefix that matches both paths.
+        known_exports = get_posix_export_dirs(
+            {
+                "Exports": [
+                    {
+                        "storageprefix": "/data",
+                        "federationprefix": "/ospool",
+                        "capabilities": ["PublicReads"],
+                    },
+                    {
+                        "storageprefix": "/data/private",
+                        "federationprefix": "/ospool/private",
+                        "capabilities": [],
+                    },
+                ]
+            }
+        )
+
+        result = resolve_storage_federation_mapping(
+            known_exports, "/data/private/team:/ospool/private/team"
+        )
+
+        assert result == ("/data/private/team", "/ospool/private/team", False)
+
+    def test_rejects_mapping_when_storage_and_federation_do_not_match_one_export(self):
+        # The storage and federation sides must belong to the same configured
+        # export; otherwise a scan could apply the wrong access policy.
+        known_exports = get_posix_export_dirs(
+            {
+                "Exports": [
+                    {
+                        "storageprefix": "/data",
+                        "federationprefix": "/ospool/data",
+                        "capabilities": [],
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(RuntimeError, match="no matching export found"):
+            resolve_storage_federation_mapping(
+                known_exports, "/other:/ospool/data/sub"
+            )
+
+
+# ---------------------------------------------------------------------------
+# handle_scan
+# ---------------------------------------------------------------------------
+
+
+class TestHandleScan:
+    def test_scans_immediate_directories_and_preserves_policy(self, tmp_path):
+        # Real temporary directories exercise os.scandir while mocking only the
+        # filesystem-size lookup, making the emitted child exports deterministic.
+        storage_root = tmp_path / "storage"
+        (storage_root / "alpha" / "nested").mkdir(parents=True)
+        (storage_root / "beta").mkdir()
+        (storage_root / "not-a-directory").write_text("ignored")
+        cfg = {
+            "Exports": [
+                {
+                    "storageprefix": str(tmp_path),
+                    "federationprefix": "/ospool",
+                    "capabilities": ["PublicReads"],
+                }
+            ]
+        }
+        result = {"posix": {"exports": []}, "storagetype": "unexpected"}
+
+        def measure(path):
+            return {"alpha": 11, "beta": 22}[path.rsplit("/", 1)[-1]]
+
+        with patch("inner.get_dir_bytes", side_effect=measure):
+            handle_scan(cfg, result, [f"{storage_root}:/ospool/storage"])
+
+        exports = {item["storage_prefix"]: item for item in result["posix"]["exports"]}
+        assert set(exports) == {str(storage_root / "alpha"), str(storage_root / "beta")}
+        assert (
+            exports[str(storage_root / "alpha")]["federation_prefix"]
+            == "/ospool/storage/alpha"
+        )
+        assert exports[str(storage_root / "alpha")]["public"] is True
+        assert exports[str(storage_root / "alpha")]["size"] == 11
+        assert exports[str(storage_root / "beta")]["size"] == 22
+        assert result["storagetype"] == "posix"
+
+    def test_records_measurement_errors_and_skips_malformed_arguments(
+        self, tmp_path, capsys
+    ):
+        # Scan mode continues after a malformed argument and after a single
+        # child fails to measure, preserving the error on that child export.
+        storage_root = tmp_path / "storage"
+        (storage_root / "good").mkdir(parents=True)
+        (storage_root / "bad").mkdir()
+        cfg = {
+            "Exports": [
+                {
+                    "storageprefix": str(tmp_path),
+                    "federationprefix": "/ospool",
+                    "capabilities": [],
+                }
+            ]
+        }
+        result = {"posix": {"exports": []}}
+
+        def measure(path):
+            if path.endswith("/bad"):
+                raise PermissionError("denied")
+            return 7
+
+        with patch("inner.get_dir_bytes", side_effect=measure):
+            handle_scan(
+                cfg,
+                result,
+                ["malformed", f"{storage_root}:/ospool/storage"],
+            )
+
+        exports = {item["storage_prefix"]: item for item in result["posix"]["exports"]}
+        assert exports[str(storage_root / "good")]["size"] == 7
+        assert exports[str(storage_root / "bad")]["size"] is None
+        assert exports[str(storage_root / "bad")]["error"] == "denied"
+        assert "skipping malformed scan argument" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
