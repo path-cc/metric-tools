@@ -253,7 +253,7 @@ def gather_from_clusters(args: argparse.Namespace, config: ConfigData) -> list[s
 
         with open(out_file, "a") as fh:
             for namespace in namespaces:
-                # If -n is specified, stop after the given number of namespaces.
+                # If -n is specified, stop after the given number of origins.
                 if args.n is not None and cluster_count >= args.n:
                     break
                 cluster_count, cluster_skipped, eligible, excluded = _process_namespace(
@@ -295,7 +295,7 @@ def print_tables_from_files(
 
     Parameters
     ----------
-    input_flies:
+    input_files:
         A list of input files to read data from.
     config:
         The ConfigData object containing various mappings.
@@ -332,13 +332,17 @@ def print_tables_from_files(
                 all_ok = False
             sys.stdout.flush()
     if print_summary:
-        print_collabs_summary(
-            input_files,
-            config.collab_ns_map,
-            exclude_ns_globs=config.exclude_ns_globs,
-            title="Storage Utilization",
-            max_age=max_age,
-        )
+        try:
+            print_collabs_summary(
+                input_files,
+                config.collab_ns_map,
+                exclude_ns_globs=config.exclude_ns_globs,
+                title="Storage Utilization",
+                max_age=max_age,
+            )
+        except OSError as err:
+            print(f"Error loading summary input: {err}", file=sys.stderr)
+            all_ok = False
         sys.stdout.flush()
     return all_ok
 

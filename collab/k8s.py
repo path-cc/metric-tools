@@ -133,6 +133,8 @@ def namespace_for_context(context: Optional[str] = None) -> str:
         # Columns: NAME CLUSTER AUTHINFO [NAMESPACE]
         if len(parts) >= 4:
             return parts[3]
+        if len(parts) == 3:
+            return "default"
     raise Error(f"Could not determine namespace for context {context!r}")
 
 

@@ -29,7 +29,7 @@ Usage
 -----
 
 1. Set up your kubeconfig file to have separate contexts for Nautilus,
-   Tempest, and Tiger.  (The contexts should be named "nautlius",
+   Tempest, and Tiger.  (The contexts should be named "nautilus",
    "tempest", and "tiger", though that can be changed with a command-line
    argument.)
 
