@@ -473,13 +473,16 @@ def test_process_namespace_exclude(mock_access, mock_find, mock_exports, tmp_pat
 
     # -p selects the excluded pod explicitly: exclusion does not apply
     mock_exports.reset_mock()
-    args_p = argparse.Namespace(n=None, s=0, pod=["nsdf-origin"], verbose=False)
+    args_p = argparse.Namespace(
+        n=None, s=0, pod=["nsdf-origin"], verbose=False, debug_inner=False
+    )
     with open(out_file, "w") as fh:
         count, _, eligible, excluded = _process_namespace(
             "nautilus", "ctx", "ns", fh, args_p, {}, 0, 0, exclude_globs=["nsdf-origin*"]
         )
     assert excluded == 0
     assert count == 1
+    mock_exports.assert_called_once()
 
 
 @patch("storage_metrics.print_exports_table")

@@ -51,9 +51,8 @@ def test_is_origin_container():
 
 def test_examine_pod():
     # Mock _current_context and _namespace_for_context to avoid subprocess calls
-    with (
-        patch("k8s._current_context", return_value="my-context"),
-        patch("k8s.namespace_for_context", return_value="my-ns"),
+    with patch("k8s._current_context", return_value="my-context"), patch(
+        "k8s.namespace_for_context", return_value="my-ns"
     ):
 
         # Pod with origin container should be recognized and returned
