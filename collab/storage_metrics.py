@@ -218,7 +218,7 @@ def read_config(args: argparse.Namespace) -> ConfigData:
 
 def k8s_pre_flight_check(clusters: T_Clusters) -> bool:
     """
-    Check if the requested clusters are reachable.
+    Check if the requested clusters and their configured namespaces are reachable.
 
     Parameters
     ----------
@@ -228,18 +228,31 @@ def k8s_pre_flight_check(clusters: T_Clusters) -> bool:
     Returns
     -------
     bool
-        True if the clusters are accessible.
+        True if the clusters and all their namespaces are accessible.
     """
     inaccessible_clusters = []
+    inaccessible_namespaces = []
     for cluster_name, section in clusters:
         context = section["context"]
         if not check_cluster_access(cluster_name, context):
             inaccessible_clusters.append(cluster_name)
-    if inaccessible_clusters:
-        print(
-            "ERROR: cannot access cluster(s): " + ", ".join(inaccessible_clusters),
-            file=sys.stderr,
-        )
+            # No point checking namespaces if the cluster itself is unreachable.
+            continue
+        for namespace in section["namespaces"].split():
+            if not check_namespace_access(cluster_name, context, namespace):
+                inaccessible_namespaces.append(f"{cluster_name}/{namespace}")
+    if inaccessible_clusters or inaccessible_namespaces:
+        if inaccessible_clusters:
+            print(
+                "ERROR: cannot access cluster(s): " + ", ".join(inaccessible_clusters),
+                file=sys.stderr,
+            )
+        if inaccessible_namespaces:
+            print(
+                "ERROR: cannot access namespace(s): "
+                + ", ".join(inaccessible_namespaces),
+                file=sys.stderr,
+            )
         return False
     return True
 
@@ -465,9 +478,6 @@ def _process_namespace(
     """
     if exclude_globs is None:
         exclude_globs = []
-
-    if not check_namespace_access(cluster_name, context, namespace):
-        return origin_count, origins_skipped, 0, 0
 
     try:
         origins = list(find_pelican_origin_pods(context=context, namespace=namespace))

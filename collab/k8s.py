@@ -77,35 +77,16 @@ def check_namespace_access(cluster: str, context: str, namespace: str) -> bool:
 
 def check_cluster_access(cluster: str, context: str) -> bool:
     """
-    Return True if the current credentials can access the cluster context.
-
-    Both permissions are checked even when the first one fails so callers can
-    report the complete access status before starting data collection.
+    Return True if the cluster defined in the given context is accessible.
     """
-    checks = [
-        ["kubectl", "--context", context, "auth", "can-i", "get", "pods"],
-        [
-            "kubectl",
-            "--context",
-            context,
-            "auth",
-            "can-i",
-            "create",
-            "pods/exec",
-        ],
-    ]
-    access = True
-    for cmd in checks:
-        ret = run(cmd, check=False)
-        if ret.returncode != 0 or ret.stdout.strip() != "yes":
-            print(
-                f"ERROR: insufficient access to cluster={cluster!r}: "
-                f"{' '.join(cmd[5:])} -> "
-                f"{ret.stdout.strip() or ret.stderr.strip()}",
-                file=sys.stderr,
-            )
-            access = False
-    return access
+    ret = run(["kubectl", "--context", context, "auth", "whoami"], check=False)
+    if ret.returncode != 0:
+        print(
+            f"ERROR: Cluster {cluster!r} inaccessible:" f"{ret.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return False
+    return True
 
 
 def _current_context() -> str:
