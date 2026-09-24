@@ -62,7 +62,11 @@ def _read_exports(
             entry = json.loads(line)
             time_str = entry.get("time")
             try:
-                entry_time = datetime.datetime.fromisoformat(time_str)
+                entry_time = datetime.datetime.fromisoformat(
+                    time_str.replace(
+                        "Z", "+00:00"
+                    )  # Python 3.9 does not accept the Z suffix
+                )
             except (TypeError, ValueError):
                 _log.debug("%s: Skipping (missing or invalid time)", entry)
                 continue
