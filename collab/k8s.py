@@ -86,7 +86,7 @@ def check_cluster_access(cluster: str, context: str) -> bool:
     ret = run(["kubectl", "--context", context, "auth", "whoami"], check=False)
     if ret.returncode != 0:
         print(
-            f"ERROR: Cluster {cluster!r} inaccessible:" f"{ret.stderr.strip()}",
+            f"ERROR: Cluster {cluster!r} inaccessible: {ret.stderr.strip()}",
             file=sys.stderr,
         )
         return False
