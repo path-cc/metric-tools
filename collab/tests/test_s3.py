@@ -6,7 +6,7 @@ from s3 import get_s3_bucket_size, handle_s3_exports
 @patch("s3.run")
 def test_get_s3_bucket_size(mock_run):
     # HEAD probe matching bucket-size should return that value
-    mock_run.return_value = MagicMock(stdout="", stderr="bucket-size: 1000\n")
+    mock_run.return_value = MagicMock(stdout="", stderr="x-rgw-bytes-used: 1000\n")
     assert get_s3_bucket_size("my-bucket", "http://endpoint") == 1000
 
     # HEAD probe no match should fall back to full object sum

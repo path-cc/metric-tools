@@ -93,7 +93,7 @@ def get_s3_bucket_size(
         extra_env=extra_env,
     )
     for line in (ret.stdout + ret.stderr).splitlines():
-        if re.search(r"bucket.*(size|bytes)", line, re.IGNORECASE):
+        if re.search(r"x-rgw-bytes-used", line, re.IGNORECASE):
             m = re.search(r"\b(\d+)\b", line)
             if m:
                 print(f"{bucket}: size from HEAD probe", flush=True)
