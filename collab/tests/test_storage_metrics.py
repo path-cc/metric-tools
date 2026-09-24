@@ -493,17 +493,17 @@ def test_main_all_pods_skipped(
     # All eligible pods excluded: warning printed
     mock_process.return_value = (0, 0, 3, 3)
     main(["--nautilus"])
-    assert "All pods for nautilus skipped." in capsys.readouterr().err
+    assert "All origin pods for nautilus skipped." in capsys.readouterr().err
 
     # Only some excluded: no warning
     mock_process.return_value = (1, 0, 3, 2)
     main(["--nautilus"])
-    assert "All pods for nautilus skipped." not in capsys.readouterr().err
+    assert "All origin pods for nautilus skipped." not in capsys.readouterr().err
 
     # No eligible pods at all: no warning
     mock_process.return_value = (0, 0, 0, 0)
     main(["--nautilus"])
-    assert "All pods for nautilus skipped." not in capsys.readouterr().err
+    assert "All origin pods for nautilus skipped." not in capsys.readouterr().err
 
 
 def test_process_origin_adds_date(tmp_path):

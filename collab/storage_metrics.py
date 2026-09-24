@@ -252,32 +252,32 @@ def gather_from_clusters(args: argparse.Namespace, config: ConfigData) -> list[s
         namespaces = section["namespaces"].split()
         out_file = section["file"]
         exclude_globs = section.get("exclude_origins", "").split()
-        cluster_count = 0
-        cluster_skipped = 0
-        cluster_eligible = 0
-        cluster_excluded = 0
+        origin_count = 0
+        origins_skipped = 0
+        origins_eligible = 0
+        origins_excluded = 0
 
         with open(out_file, "a") as fh:
             for namespace in namespaces:
                 # If -n is specified, stop after the given number of origins.
-                if args.n is not None and cluster_count >= args.n:
+                if args.n is not None and origin_count >= args.n:
                     break
-                cluster_count, cluster_skipped, eligible, excluded = _process_namespace(
+                origin_count, origins_skipped, eligible, excluded = _process_namespace(
                     cluster_name,
                     context,
                     namespace,
                     fh,
                     args,
                     config.sub_ns_map,
-                    cluster_count,
-                    cluster_skipped,
+                    origin_count,
+                    origins_skipped,
                     exclude_globs,
                 )
-                cluster_eligible += eligible
-                cluster_excluded += excluded
+                origins_eligible += eligible
+                origins_excluded += excluded
 
-        if cluster_eligible > 0 and cluster_eligible == cluster_excluded:
-            print(f"All pods for {cluster_name} skipped.", file=sys.stderr)
+        if origins_eligible > 0 and origins_eligible == origins_excluded:
+            print(f"All origin pods for {cluster_name} skipped.", file=sys.stderr)
 
         out_files.append(out_file)
 
@@ -448,8 +448,8 @@ def _process_namespace(
     fh,
     args: argparse.Namespace,
     sub_ns_map: T_SubNSMap,
-    cluster_count: int,
-    cluster_skipped: int,
+    origin_count: int,
+    origins_skipped: int,
     exclude_globs: Optional[list[str]] = None,
 ) -> tuple[int, int, int, int]:
     """
@@ -459,7 +459,7 @@ def _process_namespace(
     Returns
     -------
     tuple[int, int, int, int]
-        Updated ``(cluster_count, cluster_skipped, eligible, excluded)`` where
+        Updated ``(origin_count, origins_skipped, eligible, excluded)`` where
         *eligible* is the number of pods that would have been processed and
         *excluded* is how many of those were silently skipped by *exclude_globs*.
     """
@@ -467,7 +467,7 @@ def _process_namespace(
         exclude_globs = []
 
     if not check_namespace_access(cluster_name, context, namespace):
-        return cluster_count, cluster_skipped, 0, 0
+        return origin_count, origins_skipped, 0, 0
 
     try:
         origins = list(find_pelican_origin_pods(context=context, namespace=namespace))
@@ -477,13 +477,13 @@ def _process_namespace(
             f"namespace={namespace!r}: {err}",
             file=sys.stderr,
         )
-        return cluster_count, cluster_skipped, 0, 0
+        return origin_count, origins_skipped, 0, 0
 
     eligible = 0
     excluded = 0
 
     for origin in origins:
-        if args.n is not None and cluster_count >= args.n:
+        if args.n is not None and origin_count >= args.n:
             break
 
         explicitly_selected = bool(args.pod) and any(
@@ -491,8 +491,8 @@ def _process_namespace(
         )
         if args.pod and not explicitly_selected:
             continue
-        if cluster_skipped < args.s:
-            cluster_skipped += 1
+        if origins_skipped < args.s:
+            origins_skipped += 1
             continue
 
         prefix_pairs = _get_sub_ns_prefixes(sub_ns_map, cluster_name, origin.pod_name)
@@ -509,9 +509,9 @@ def _process_namespace(
             continue
 
         _process_origin(cluster_name, origin, prefix_pairs, fh, args)
-        cluster_count += 1
+        origin_count += 1
 
-    return cluster_count, cluster_skipped, eligible, excluded
+    return origin_count, origins_skipped, eligible, excluded
 
 
 def main(argv=None) -> int:
