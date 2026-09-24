@@ -199,7 +199,7 @@ def test_main_input_flag(mock_table, mock_summary, tmp_path, monkeypatch):
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_default_behavior(
     mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
@@ -231,7 +231,7 @@ def test_main_default_behavior(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_context_override(
     mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
@@ -254,7 +254,7 @@ def test_main_context_override(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_renders_tables_after_all_clusters_are_collected(
     mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
@@ -291,7 +291,7 @@ def test_main_renders_tables_after_all_clusters_are_collected(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_no_flags(
     mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
@@ -323,9 +323,10 @@ def test_main_no_flags(
 
 
 @patch("storage_metrics._process_namespace")
+@patch("storage_metrics.check_namespace_access", return_value=True)
 @patch("storage_metrics.check_cluster_access", side_effect=[False, True, False])
 def test_main_checks_all_clusters_before_collection(
-    mock_access, mock_process, tmp_path, monkeypatch, capsys
+    mock_access, mock_namespace_access, mock_process, tmp_path, monkeypatch, capsys
 ):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "config.ini").write_text(
@@ -339,6 +340,9 @@ def test_main_checks_all_clusters_before_collection(
         ("nautilus", "c1"),
         ("tiger", "c2"),
         ("tempest", "c3"),
+    ]
+    assert [call.args for call in mock_namespace_access.call_args_list] == [
+        ("tiger", "c2", "ns2"),
     ]
     mock_process.assert_not_called()
     assert "nautilus, tempest" in capsys.readouterr().err
@@ -420,7 +424,7 @@ def test_main_input_title_disambiguation(
 @patch("storage_metrics.print_collabs_summary")
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_cluster_title(
     mock_access, mock_process, mock_table, mock_summary, tmp_path, monkeypatch
 ):
@@ -480,7 +484,7 @@ def test_process_namespace_exclude(mock_access, mock_find, mock_exports, tmp_pat
 
 @patch("storage_metrics.print_exports_table")
 @patch("storage_metrics._process_namespace")
-@patch("storage_metrics.check_cluster_access", return_value=True)
+@patch("storage_metrics.k8s_pre_flight_check", return_value=True)
 def test_main_all_pods_skipped(
     mock_access, mock_process, mock_table, tmp_path, monkeypatch, capsys
 ):
