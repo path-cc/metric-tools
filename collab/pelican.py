@@ -136,7 +136,7 @@ def copy_inner_script_to_origin(origin: Origin):
     )
 
 
-def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
+def run_inner_script(origin: Origin, *args: str, copy=True, debug_inner=False) -> dict:
     """
     Runs the inner script in the pod on the storage path, returning the result.
 
@@ -148,6 +148,8 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
         Arguments to the script.
     copy:
         True if we should copy the inner script first.
+    debug_inner:
+        True if we should print debug information on failure.
 
     Returns
     -------
@@ -165,17 +167,25 @@ def run_inner_script(origin: Origin, *args: str, copy=True) -> dict:
     try:
         results = json.loads(ret.stdout)
     except json.JSONDecodeError as err:
-        raise InnerScriptError(
-            f"inner script failed to return parseable output: {err}.\n"
-            f"stdout: {ret.stdout}\n"
-            f"stderr: {ret.stderr}\n"
-        ) from err
+        msg = f"inner script failed to return parseable output: {err}.\n"
+        if debug_inner and sys.stderr.isatty():
+            # make sure the output is not being logged - it could be sensitive
+            msg += f"stdout: {ret.stdout}\n"
+            msg += f"stderr: {ret.stderr}\n"
+        else:
+            msg += (
+                "debug information omitted; rerun on a tty with "
+                "--debug-inner to see more\n"
+            )
+        raise InnerScriptError(msg) from err
 
     return results
 
 
 def get_exports_for_pod(
-    origin: Origin, prefix_pairs: Optional[list[tuple[str, str]]] = None
+    origin: Origin,
+    prefix_pairs: Optional[list[tuple[str, str]]] = None,
+    debug_inner: bool = False,
 ) -> tuple[str, list[dict], str]:
     """
     Copy ``inner.py`` into *origin*, run it, and return the sitename and exports.
@@ -203,6 +213,8 @@ def get_exports_for_pod(
     prefix_pairs:
         List of ``(storage_prefix, federation_prefix)`` tuples for scan mode.
         Pass ``None`` for auto-discovery.
+    debug_inner:
+        Print additional debug information from the inner script.
 
     Returns
     -------
@@ -224,9 +236,9 @@ def get_exports_for_pod(
     copy_inner_script_to_origin(origin)
     if prefix_pairs is not None:
         args = ["scan"] + [f"{s}:{f}" for s, f in prefix_pairs]
-        result = run_inner_script(origin, *args, copy=False)
+        result = run_inner_script(origin, *args, copy=False, debug_inner=debug_inner)
     else:
-        result = run_inner_script(origin, copy=False)
+        result = run_inner_script(origin, copy=False, debug_inner=debug_inner)
     if result['status'] != "ok":
         raise InnerScriptError(f"Inner script returned error: {result['error']}")
     storagetype = result['storagetype']

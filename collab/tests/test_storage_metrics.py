@@ -153,7 +153,7 @@ def test_process_namespace_verbose(
     out_file = tmp_path / "out.jsonl"
 
     # verbose=True: before and after messages on stderr, nothing on stdout
-    args = argparse.Namespace(n=None, s=0, pod=[], verbose=True)
+    args = argparse.Namespace(n=None, s=0, pod=[], verbose=True, debug_inner=False)
     with open(out_file, "w") as fh:
         _process_namespace("tiger", "ctx", "ns", fh, args, sub_ns_map, 0, 0)
     captured = capsys.readouterr()
@@ -454,7 +454,7 @@ def test_process_namespace_exclude(mock_access, mock_find, mock_exports, tmp_pat
     )
     mock_find.return_value = [origin_excl, origin_kept]
 
-    args = argparse.Namespace(n=None, s=0, pod=[], verbose=False)
+    args = argparse.Namespace(n=None, s=0, pod=[], verbose=False, debug_inner=False)
     out_file = tmp_path / "out.jsonl"
 
     # nsdf-origin* matches the glob; my-origin* does not

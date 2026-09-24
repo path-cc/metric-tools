@@ -106,6 +106,12 @@ def parse_args(argv) -> argparse.Namespace:
         help="Print debug messages",
     )
     parser.add_argument(
+        "--debug-inner",
+        action="store_true",
+        help="Print debug messages from the inner script. WARNING: may print "
+        "sensitive information - do not log or use in CI",
+    )
+    parser.add_argument(
         "--no-exports",
         dest="print_exports",
         action="store_false",
@@ -404,10 +410,12 @@ def _process_origin(
             )
         if prefix_pairs is not None:
             sitename, exports, time_str = get_exports_for_pod(
-                origin, prefix_pairs=prefix_pairs
+                origin, prefix_pairs=prefix_pairs, debug_inner=args.debug_inner
             )
         else:
-            sitename, exports, time_str = get_exports_for_pod(origin)
+            sitename, exports, time_str = get_exports_for_pod(
+                origin, debug_inner=args.debug_inner
+            )
     except Exception as err:
         print(f"ERROR: {origin.pod_name}: {err}", file=sys.stderr)
         ok = False
