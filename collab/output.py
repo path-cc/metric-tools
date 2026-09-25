@@ -67,7 +67,7 @@ def _read_exports(
                         "Z", "+00:00"
                     )  # Python 3.9 does not accept the Z suffix
                 )
-            except (TypeError, ValueError):
+            except (AttributeError, TypeError, ValueError):
                 _log.debug("%s: Skipping (missing or invalid time)", entry)
                 continue
             if entry_time.tzinfo is None:
