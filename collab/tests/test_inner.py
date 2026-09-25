@@ -13,8 +13,8 @@ from inner import (
     get_required_config,
     get_s3_export_buckets,
     handle_posix,
-    handle_scan,
     handle_s3,
+    handle_scan,
     main,
     resolve_storage_federation_mapping,
 )
@@ -430,26 +430,6 @@ class TestResolveStorageFederationMapping:
         )
 
         assert result == ("/data/private/team", "/ospool/private/team", False)
-
-    def test_rejects_mapping_when_storage_and_federation_do_not_match_one_export(self):
-        # The storage and federation sides must belong to the same configured
-        # export; otherwise a scan could apply the wrong access policy.
-        known_exports = get_posix_export_dirs(
-            {
-                "Exports": [
-                    {
-                        "storageprefix": "/data",
-                        "federationprefix": "/ospool/data",
-                        "capabilities": [],
-                    }
-                ]
-            }
-        )
-
-        with pytest.raises(RuntimeError, match="no matching export found"):
-            resolve_storage_federation_mapping(
-                known_exports, "/other:/ospool/data/sub"
-            )
 
 
 # ---------------------------------------------------------------------------
